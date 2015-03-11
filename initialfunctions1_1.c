@@ -6,11 +6,29 @@ const unsigned char NUM_OF_ROTARYS = 6;
 const unsigned char NUM_OF_PRESETS = 4;
 const unsigned char TAPER_RESOLUTION = 128;
 const unsigned char INIT_PARA_VALS = 125;
-const unsigned char logTaperType[TAPER_RESOLUTION] PROGMEM = {};   // will hold an array for log taper adjustment
-const unsigned char anti_logTaperType[TAPER_RESOLUTION] PROGMEM = {};   // will hold an array for anti-log taper adjstment
-const unsigned char rotaryNoChange[NUM_OF_ROTARYS] = {0, 0, 0, 0, 0, 0};     // a template to check against the current rotary vals, if they are equal then there was no movement on any of the encoders
+const unsigned char LOG_TAPER_TYPE[TAPER_RESOLUTION] PROGMEM = {};   // will hold an array for log taper adjustment
+const unsigned char ANTI_LOG_TAPER_TYPE[TAPER_RESOLUTION] PROGMEM = {};   // will hold an array for anti-log taper adjstment
+const unsigned char ROTARY_NO_CHAMGE[NUM_OF_ROTARYS] = {0, 0, 0, 0, 0, 0};     // a template to check against the current rotary vals, if they are equal then there was no movement on any of the encoders
 const unsigned char ROTARY_STARTUPVALS = 0;
-const unsigned char PRESET_SIZE = 74;
+const unsigned char PRESET_SIZE = NUM_OF_PARAMETERS*3+2;
+
+const unsigned char DEF_1_BIT = 7;
+const unsigned char DEF_2_BIT = 6;
+const unsigned char DEF_3_BIT = 5;
+const unsigned char DEF_4_BIT = 4;
+const unsigned char DEF_5_BIT = 3;
+const unsigned char DEF_6_BIT = 2;
+const unsigned char KILL_BIT = 1;
+const unsigned char ANTI_KILL_BIT = 0;
+
+const unsigned char TUNER_BIT = 7;
+const unsigned char PAGE_TWO_BIT = 6;
+const unsigned char PAGE_ONE_BIT = 5;
+const unsigned char SAVE_PRESET_BIT = 4;
+const unsigned char SAVE_DEFAULT_BIT = 3;
+const unsigned char XY_HOLD_BIT = 2;
+const unsigned char ASSIGN_X_BIT = 1;
+const unsigned char ASSIGN_Y_BIT = 0;
 
 signed char rotaryVals[NUM_OF_ROTARYS];   // current incremental info on the rotary encoders(how much they've all turned since last loop iteration) these will be added or subtracted from selected parameters rawValue
 unsigned char defVals[NUM_OF_PARAMETERS];
@@ -21,7 +39,6 @@ unsigned char btnStatesTwo;    // holds a byte of data where each bit represents
 unsigned char pageNum;         // holds the current page number
 unsigned char xAssignment;
 unsigned char yAssignment;
-
 int rawVals[NUM_OF_PARAMETERS];     // holds the untapered values of the current parameter[24] values
 unsigned char presetNum; // holds the number of the current preset
 
@@ -60,8 +77,8 @@ void loop() {
   };
   
   void setPageNum() {
-    bitWrite(pageNum, 0, bitRead(btnStatesOne, 0));
-    bitWrite(pageNum, 1, bitRead(btnStatesOne, 1));
+    bitWrite(pageNum, 0, bitRead(btnStatesOne, PAGE_ONE_BIT));
+    bitWrite(pageNum, 1, bitRead(btnStatesOne, PAGE_TWO_BIT));
   };
   
 //  the two functions below the following two are better I think...
@@ -103,7 +120,7 @@ void loop() {
   };
   
   unsigned char checkForBtnClick() {
-    for(unsigned char i = 2; i<NUM_OF_ROTARYS+2; i++) {
+    for(unsigned char i = 2; i<8; i++) {
       if(bitRead(btnStatesOne, i)) {
         return i-1;
       };
@@ -130,8 +147,8 @@ void loop() {
     static unsigned char lastXYState = 0;
     static unsigned char currentXYState = 0;  // static so it doesn't instanciate each iteration???...maybe...idk
     static unsigned char btnCLick = 0;
-    bitWrite(currentXYState, 0, bitRead(btnStatesTwo, 0)); // 0 bit = xAssign
-    bitWrite(currentXYState, 1, bitRead(btnStatesTwo, 1)); // 1 bit = yAssign
+    bitWrite(currentXYState, 0, bitRead(btnStatesTwo, ASSIGN_X_BIT)); // 0 bit = xAssign
+    bitWrite(currentXYState, 1, bitRead(btnStatesTwo, ASSIGN_Y_BIT)); // 1 bit = yAssign
     switch (currentXYState) {
       case 0:
       //do nothing
@@ -179,7 +196,7 @@ void loop() {
     };
   };
   boolean checkPreset() {
-    return bitRead(btnStatesTwo, 1);
+    return bitRead(btnStatesTwo, SAVE_PRESET_BIT);
   };
   
   void setPreset() {
@@ -194,8 +211,8 @@ void loop() {
     };    
   };
   
-  boolean checkSaveDeft() {
-    return bitRead(btnStatesTwo, 2);
+  boolean checkSaveDeF() {
+    return bitRead(btnStatesTwo, SAVE_DEFAULT_BIT);
   };
   
   void setDefault() {
@@ -207,6 +224,16 @@ void loop() {
       };
     };
       
+  };
+  
+  boolean checkTunerState() {
+   return bitRead(btnStatesTwo, TUNER_BIT);
+  };
+  
+  void setTuner() {
+    if(checkTunerState()) {
+      
+    };
   };
   
   
