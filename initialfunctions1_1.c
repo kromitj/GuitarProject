@@ -10,6 +10,7 @@ const unsigned char logTaperType[TAPER_RESOLUTION] PROGMEM = {};   // will hold 
 const unsigned char anti_logTaperType[TAPER_RESOLUTION] PROGMEM = {};   // will hold an array for anti-log taper adjstment
 const unsigned char rotaryNoChange[NUM_OF_ROTARYS] = {0, 0, 0, 0, 0, 0};     // a template to check against the current rotary vals, if they are equal then there was no movement on any of the encoders
 const unsigned char ROTARY_STARTUPVALS = 0;
+const unsigned char PRESET_SIZE = 74;
 
 signed char rotaryVals[NUM_OF_ROTARYS];   // current incremental info on the rotary encoders(how much they've all turned since last loop iteration) these will be added or subtracted from selected parameters rawValue
 unsigned char defVals[NUM_OF_PARAMETERS];
@@ -103,51 +104,72 @@ void loop() {
 
   
   void xyAssignmentCheck() {
+    static unsigned char xOrYFirst = 0;
     static unsigned char lastXYState = 0;
     static unsigned char currentXYState = 0;  // static so it doesn't instanciate each iteration???...maybe...idk
     bitWrite(currentXYState, 0, bitRead(btnStatesTwo, 0)); // 0 bit = xAssign
     bitWrite(currentXYState, 1, bitRead(btnStatesTwo, 1)); // 1 bit = yAssign
-    if(currentXYState != lastXYState) {
-      switch (currentXYState) {
-        case 0 :
-          // one of the buttons was pressed but is now unpressed
-          lastXYState = currentXYState;
-          break;
-        case 1 :
-          //assignXTouch();  // assignX btn pressed
-          lastXYState = currentXYState;
-          break;
-        case 2 :
-         // assignYTouch(); // assignY btn pressed
-          lastXYState = currentXYState;
-          break;
-        case 3 :
-          if(lastXYState = 0){
-           // assignXtouch(); // both pressed at same time
+    switch (currentXYState) {
+      case 0:
+      //do nothing
+      //xOrYFirst = 0;
+      lastXYState = currentXYState;
+      break;
+      case 1:
+      // check for default btn click 
+      unsigned char btnClick = checkForBtnClick(); // need to make function
+      assignX(btnCick);                             // also need to make function
+      xOrYFirst = 1;
+      lastXYState = currentXYState;
+      break;
+      case 2:
+      // ckeck for default btn click
+      unsigned char btnClick = checkForBtnClick(); // need to make function returns a numeric code(1-6)
+      assignY(btnCick);                             // also need to make function
+      xOrYFirst = 2;
+      lastXYState = currentXYState;
+
+      break;
+      case 3:
+        //do something when var equals 1
+        unsigned char btnClick = checkForBtnClick(); // need to make function returns a numeric code(1-6)
+        switch (lastXYState) {
+          case 0:
+            assignX(btnCick);                             // also need to make function
+            xOrYFirst = 1;
             lastXYState = currentXYState;
-          } else if (lastXYState = 1) {
-           // assignYTouch();
-            lastXYState = currentXYState;
-          } else if (lastXYState = 2) {
-           // assignXTouch();
-            lastXYState = currentXYState;
-          };
           break;
+          case 1:
+            assignY(btnCick)                             // also need to make function
+            lastXYState = currentXYState;
+            break;
+          case 2:
+            assignX(btnCick)                             // also need to make function
+            lastXYState = currentXYState;
+            break;
+          case 3:
+            if(xOrYFirst=1){
+              assignY(btnClick);
+            }else if(xOrYFirst = 2){
+              assignX(btnCick); 
+            };                                          // also need to make function
+            lastXYState = currentXYState;
+            break;
       };
     };
   };
   
-  void setPreset(unsigned char presetNumber) {
+  void setPreset() {
     // defaultVals[24];
    //defaultStates[24];
     // rawValues[24];
     for(unsigned char i=0; i<NUM_OF_PARAMETERS;) {      
-        EEPROM.write(i*NUM_OF_PRESETS+presetNum, defVals[i]);
-        EEPROM.write(i*NUM_OF_PRESETS+presetNum+NUM_OF_PARAMETERS, defStates[i]);
-        EEPROM.write(i*NUM_OF_PRESETS+presetNum+(NUM_OF_PARAMETERS*2), rawVals[i]);        
+        EEPROM.write(presetNum*PRESET_SIZE+i, defVals[i]);
+        EEPROM.write(NUM_OF_PARAMETERS+(pesetNum*PRESET_SIZE+i), defStates[i]);
+        EEPROM.write((NUM_OF_PARAMETERS*2)+(pesetNum*PRESET_SIZE+i), rawVals[i]);        
     };
-        EEPROM.write((NUM_OF_PRESETS-1)*(NUM_OF_PARAMETERS*4)+presetNum, xAssignment);
-        EEPROM.write((NUM_OF_PRESETS-1)*(NUM_OF_PARAMETERS*4)+presetNum+NUM_OF_PRESETS, yAssignment);
+        EEPROM.write((NUM_OF_PARAMETERS*3)+(pesetNum*PRESET_SIZE), xAssignment);
+        EEPROM.write((NUM_OF_PARAMETERS*3)+(pesetNum*PRESET_SIZE)+1, yAssignment);
         
   };
   
