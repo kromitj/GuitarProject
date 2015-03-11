@@ -85,7 +85,7 @@ void loop() {
 //    };
 //  };
    void rotarysChangeState() {    
-      for(unsigned char i=0; i<NUM_OF_ROTARYS;i++) {
+      for(unsigned char i=0; i<NUM_OF_ROTARYS; i++) {
         if(rotaryVals[i] != rotaryNoChange[i]) {
           setRawVals(i);
         }; 
@@ -101,12 +101,35 @@ void loop() {
     };
     rawVals[pageNum*NUM_OF_ROTARYS+counter] = rawValsHolder; // did this cuz not sure if (rawValsHolder = rawVals[pageNum*6+counter]) just copies rawVals[pageNum*6+counter] or allows direct minipulation of rawVals[pageNum*6+counter]
   };
-
+  
+  unsigned char checkForBtnClick() {
+    for(unsigned char i = 2; i<NUM_OF_ROTARYS+2; i++) {
+      if(bitRead(btnStatesOne, i)) {
+        return i-1;
+      };
+    };
+    return 0;
+  };
+  
+  void assignX() {
+    unsigned char btnCLick = checkForBtnClick() 
+    if(btnClk > 0) {
+      xAssignment = btnClk;
+    };
+  };
+  
+  void assignX(unsigned char btnClkState) {
+    unsigned char btnCLick = checkForBtnClick() 
+    if(btnClk > 0) {
+      yAssignment = btnClk;
+    }; 
+  }
   
   void xyAssignmentCheck() {
     static unsigned char xOrYFirst = 0;
     static unsigned char lastXYState = 0;
     static unsigned char currentXYState = 0;  // static so it doesn't instanciate each iteration???...maybe...idk
+    static unsigned char btnCLick = 0;
     bitWrite(currentXYState, 0, bitRead(btnStatesTwo, 0)); // 0 bit = xAssign
     bitWrite(currentXYState, 1, bitRead(btnStatesTwo, 1)); // 1 bit = yAssign
     switch (currentXYState) {
@@ -117,61 +140,76 @@ void loop() {
       break;
       case 1:
       // check for default btn click 
-      unsigned char btnClick = checkForBtnClick(); // need to make function
-      assignX(btnCick);                             // also need to make function
+      assignX();                             // also need to make function
       xOrYFirst = 1;
       lastXYState = currentXYState;
       break;
       case 2:
       // ckeck for default btn click
-      unsigned char btnClick = checkForBtnClick(); // need to make function returns a numeric code(1-6)
-      assignY(btnCick);                             // also need to make function
+      assignY();                             // also need to make function
       xOrYFirst = 2;
       lastXYState = currentXYState;
 
       break;
       case 3:
         //do something when var equals 1
-        unsigned char btnClick = checkForBtnClick(); // need to make function returns a numeric code(1-6)
         switch (lastXYState) {
           case 0:
-            assignX(btnCick);                             // also need to make function
+            assignX();                             // also need to make function
             xOrYFirst = 1;
             lastXYState = currentXYState;
           break;
           case 1:
-            assignY(btnCick)                             // also need to make function
+            assignY()                             // also need to make function
             lastXYState = currentXYState;
             break;
           case 2:
-            assignX(btnCick)                             // also need to make function
+            assignX()                             // also need to make function
             lastXYState = currentXYState;
             break;
           case 3:
             if(xOrYFirst=1){
-              assignY(btnClick);
+              assignY();
             }else if(xOrYFirst = 2){
-              assignX(btnCick); 
+              assignX(); 
             };                                          // also need to make function
             lastXYState = currentXYState;
             break;
       };
     };
   };
+  boolean checkPreset() {
+    return bitRead(btnStatesTwo, 1);
+  };
   
   void setPreset() {
-    // defaultVals[24];
-   //defaultStates[24];
-    // rawValues[24];
-    for(unsigned char i=0; i<NUM_OF_PARAMETERS;) {      
+    if (checkPreset()) {
+      for(unsigned char i=0; i<NUM_OF_PARAMETERS; i++) {      
         EEPROM.write(presetNum*PRESET_SIZE+i, defVals[i]);
         EEPROM.write(NUM_OF_PARAMETERS+(pesetNum*PRESET_SIZE+i), defStates[i]);
         EEPROM.write((NUM_OF_PARAMETERS*2)+(pesetNum*PRESET_SIZE+i), rawVals[i]);        
-    };
+      };
         EEPROM.write((NUM_OF_PARAMETERS*3)+(pesetNum*PRESET_SIZE), xAssignment);
         EEPROM.write((NUM_OF_PARAMETERS*3)+(pesetNum*PRESET_SIZE)+1, yAssignment);
-        
+    };    
   };
+  
+  boolean checkSaveDeft() {
+    return bitRead(btnStatesTwo, 2);
+  };
+  
+  void setDefault() {
+    if(checkSaveDef()) {
+      for(unsigned char i = 0; 0<NUM_OF_PARAMETERS; i++) {
+        if(defStates[i] = false) {
+          defVals[i] = rawVals[i];
+        };
+      };
+    };
+      
+  };
+  
+  
   
   
   
