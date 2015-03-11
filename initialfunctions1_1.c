@@ -39,6 +39,7 @@ const unsigned char ASSIGN_Y_BIT = 0;
 ///////////////////////////////////////   Global Variables
  
 unsigned char defVals[NUM_OF_PARAMETERS];
+unsigned char rGBOutputs[NUM_OF_ROTARYS*3];
 unsigned char xYInputVals[4];  // holds the current values of the xy touch pad and last
 unsigned char btnStatesOne;    // holds a byte of data where each bit represents a button state
 unsigned char btnStatesTwo;    // holds a byte of data where each bit represents a button state
@@ -342,7 +343,15 @@ void loop() {
       };
     };
     
-    const unsigned char rgbOutputArray[768] = { // 0--------64------128---- 192---->255   PWM Vals
+    void setRGBVals() {
+      for(unsigned char i = 0; i<NUM_OF_ROTARYS) {
+        for(unsigned char j = 0; j<3; j++) {
+          rGBOutputs[(i*3)+j] = rGBTemplateArray[taperedVals[pageNum*6+i]+j];
+        };
+      };
+    };
+    
+    const unsigned char rGBTemplateArray[768] = { // 0--------64------128---- 192---->255   PWM Vals
                                                 // green----cyan----blue----mag---->red
       0, 255, 0,
       0, 255, 4, 0, 255, 8, 0, 255, 12, 0, 255, 16, 0 , 155, 20, 0, 255, 24, 0, 255, 28, 0, 255, 32, 0, 255, 36, 0, 255, 40,
@@ -370,6 +379,6 @@ void loop() {
       255, 0, 132, 255, 0, 128, 255, 0, 124, 255, 0, 120, 255, 0, 116, 255, 0, 112, 255, 0, 108, 255 , 0, 104, 255, 0, 100, 255, 0, 96,
       255, 0, 92, 255, 0, 88, 255, 0, 84, 255, 0, 80, 255, 0, 76, 255, 0, 72, 255, 0, 68, 255 , 0, 64, 255, 0, 60, 255, 0, 56,
       255, 0, 52, 255, 0, 48, 255, 0, 44, 255, 0, 40, 255, 0, 36, 255, 0, 32, 255, 0, 28, 255 , 0, 24, 255, 0, 20, 255, 0, 16,
-      255, 0, 12, 255, 0, 8, 255, 0, 4, 255, 0, 0
+      255, 0, 12, 255, 0, 8, 255, 0, 4, 255, 0, 0, 255, 255, 255
     };
   
