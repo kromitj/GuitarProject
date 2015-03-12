@@ -22,8 +22,8 @@ const unsigned char BTN_CLK_3_BIT = 5;
 const unsigned char BTN_CLK_4_BIT = 4;
 const unsigned char BTN_CLK_5_BIT = 3;
 const unsigned char BTN_CLK_6_BIT = 2;
-const unsigned char KILL_BIT = 1;
-const unsigned char ANTI_KILL_BIT = 0;
+const unsigned char ANTI_KILL_BIT = 1;
+const unsigned char KILL_BIT = 0;
 
 ///////////////////////////////////////   btnStatesTwo Byte
 const unsigned char TUNER_BIT = 7;
@@ -155,7 +155,7 @@ void loop() {
   unsigned char checkForBtnClick() {
     for(unsigned char i = 2; i<8; i++) {
       if(bitRead(btnStatesOne, i)) {
-        return i-1;
+        return i-2;
       };
     };
     return 0;
@@ -173,14 +173,14 @@ void loop() {
   void assignX() {
     unsigned char btnClk = checkForBtnClick(); 
     if(btnClk > 0) {
-      xAssignment = btnClk;
+      xAssignment = pageNum*NUM_OF_ROTARYS+btnClk; // produces 0 -24
     };
   };
   
   void assignY() {
     unsigned char btnClk = checkForBtnClick(); 
     if(btnClk > 0) {
-      yAssignment = btnClk;
+      yAssignment = pageNum*NUM_OF_ROTARYS+btnClk;
     }; 
   }
   
@@ -196,7 +196,7 @@ void loop() {
   };
   
   void xyAssignmentCheck() {
-    static unsigned char xOrYFirst = 0;
+    static unsigned char xOrYFirst = 0; // 0 = neither 1 = xFirst 2 = yFirst
     static unsigned char lastXYState = 0;
     static unsigned char currentXYState = 0;  // static so it doesn't instanciate each iteration???...maybe...idk
     static unsigned char btnCLick = 0;
@@ -255,7 +255,7 @@ void loop() {
     return bitRead(btnStatesTwo, SAVE_PRESET_BIT);
   };
   
-  void setPreset() {
+    void setPreset() {
     static boolean presetLoopFilter = false; // keeps program from iteratind the eeprom writes over repeatedly
     if (checkPresetState()) {               // with this it will only write once per button push
       if(!presetLoopFilter){
@@ -266,10 +266,10 @@ void loop() {
         };
         EEPROM.write((NUM_OF_PARAMETERS*3)+(presetNum*PRESET_SIZE), xAssignment);
         EEPROM.write((NUM_OF_PARAMETERS*3)+(presetNum*PRESET_SIZE)+1, yAssignment);
-        presetFilterLoop = true;
+        presetLoopFilter = true;
       };
     } else {
-        presetFilterLoop = false; 
+        presetLoopFilter = false; 
     };
   };
   
@@ -330,32 +330,105 @@ void loop() {
     unsigned char antiKillState = checkAntiKillState();
     for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
       outputVals[i] = taperedVals[i];
-    };    
-    killAntiKillLogic(killState, antiKillState); // need to write this then the final output action will coorespond with the returned value of killAntiKillLogic
+    };        
   };
+ 
+ void kill() {};
+ void antiKill() {};
+ void overRideKill() {};
+ void setKillFirst(boolean state) {};
+ void setAntiFirst(boolean state) {}; 
   
-    void killAntiKillLogic(unsigned char killState, unsigned char antiKillState) {
-      static unsigned char killAntiNumCode = 0;
-      bitWrite(killAntiNumCode, 2, bitRead(killAntiNumCode, 0));
-      bitWrite(killAntiNumCode, 3, bitRead(killAntiNumCode, 1));
-      bitWrite(killAntiNumCode, 0, killState);
-      bitWrite(killAntiNumCode, 1, antiKillState);
+  
+  void killAntiKillLogic() {
+    static unsigned char killAntiKillNum = 0;
+    bitWrite(killAntiKillNum, 1, bitRead(killAntiKillNum, 0));
+    bitWrite(killAntiKillNum, 3, bitRead(killAntiKillNum, 2));      
+    bitWrite(killAntiKillNum, 0, bitRead(btnStatesOne, 0));
+    bitWrite(killAntiKillNum, 2, bitRead(btnStatesOne, 1));
+    switch (killAntiKillNum) {
       
+    case 19:
+     // kill();    |
+    case 47:   //  |
+     // kill();    |
+    case 27:   //  |
+     // kill();    |
+    case 45:   // \/
+      kill();  // falls through to here   
+      break; 
+      
+    case 44:
+     // antiKill();
+    case 46:
+      antiKill();
+      break;  
+      
+    case 31:
+     // overRideKill();
+    case 23:
+      overRideKill();
+      break;       
+      
+    case 1:
+      kill();
+      setKillFirst(true);
+      break;
+      
+    case 4:
+      antiKill();
+      setAntiFirst(true);
+      break;
+      
+    case 18:
+      // setkillFirst(false);
+    case 26:
+      setKillFirst(false);
+      break;         
+      
+    case 40:
+      // setAntiFirst(false); 
+    case 42:
+      setAntiFirst(false);
+      break;          
+        
+     case 43:
+      setAntiFirst(false);
+      setKillFirst(true);
+      kill();
+      break;
+      
+    case 30:
+      antiKill();
+      setKillFirst(false);
+      setAntiFirst(true);
+      break; 
+      
+      case 5:
+      setKillFirst(true);
+      kill();
+      break;
+      
+    case 22:
+      setKillFirst(false);
+      setAntiFirst(true);
+      antiKill();
+      break;     
+      
+    case 41:
+      setAntiFirst(false);
+      setKillFirst(true);
+      kill();
+      break;       
     };
+  };
     
     void sendOutputVals() {
       for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
         Serial.write(outputVals[i]);
       };
-    };
-    
-    void setRGBVals() {
-      for(unsigned char i = 0; i<NUM_OF_ROTARYS) {
-        for(unsigned char j = 0; j<3; j++) {
-          rGBOutputs[(i*3)+j] = rGBTemplateArray[taperedVals[pageNum*6+i]+j];
-        };
-      };
-    };
+    };  
+   
     
     const unsigned char rGBTemplateArray[768] = { // 0--------64------128---- 192---->255   PWM Vals
                                                 // green----cyan----blue----mag---->red
@@ -386,5 +459,13 @@ void loop() {
       255, 0, 92, 255, 0, 88, 255, 0, 84, 255, 0, 80, 255, 0, 76, 255, 0, 72, 255, 0, 68, 255 , 0, 64, 255, 0, 60, 255, 0, 56,
       255, 0, 52, 255, 0, 48, 255, 0, 44, 255, 0, 40, 255, 0, 36, 255, 0, 32, 255, 0, 28, 255 , 0, 24, 255, 0, 20, 255, 0, 16,
       255, 0, 12, 255, 0, 8, 255, 0, 4, 255, 0, 0, 255, 255, 255
+    };
+    
+     void setRGBVals() {
+      for(unsigned char i = 0; i<NUM_OF_ROTARYS;i++) {
+        for(unsigned char j = 0; j<3; j++) {
+          rGBOutputs[(i*3)+j] = rGBTemplateArray[taperedVals[pageNum*6+i]+j];
+        };
+      };
     };
   
