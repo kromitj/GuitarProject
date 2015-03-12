@@ -256,15 +256,21 @@ void loop() {
   };
   
   void setPreset() {
-    if (checkPresetState()) {
-      for(unsigned char i=0; i<NUM_OF_PARAMETERS; i++) {      // copies 74 bytes of data to eeprom
-        EEPROM.write(presetNum*PRESET_SIZE+i, defVals[i]);
-        EEPROM.write(NUM_OF_PARAMETERS+(presetNum*PRESET_SIZE+i), defStates[i]);
-        EEPROM.write((NUM_OF_PARAMETERS*2)+(presetNum*PRESET_SIZE+i), rawVals[i]);        
-      };
+    static boolean presetLoopFilter = false; // keeps program from iteratind the eeprom writes over repeatedly
+    if (checkPresetState()) {               // with this it will only write once per button push
+      if(!presetLoopFilter){
+        for(unsigned char i=0; i<NUM_OF_PARAMETERS; i++) {      // copies 74 bytes of data to eeprom
+          EEPROM.write(presetNum*PRESET_SIZE+i, defVals[i]);
+          EEPROM.write(NUM_OF_PARAMETERS+(presetNum*PRESET_SIZE+i), defStates[i]);
+          EEPROM.write((NUM_OF_PARAMETERS*2)+(presetNum*PRESET_SIZE+i), rawVals[i]);        
+        };
         EEPROM.write((NUM_OF_PARAMETERS*3)+(presetNum*PRESET_SIZE), xAssignment);
         EEPROM.write((NUM_OF_PARAMETERS*3)+(presetNum*PRESET_SIZE)+1, yAssignment);
-    };    
+        presetFilterLoop = true;
+      };
+    } else {
+        presetFilterLoop = false; 
+    };
   };
   
   boolean checkSaveDefState() {
