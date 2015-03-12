@@ -1,5 +1,6 @@
 #include <avr/pgmspace.h>
 #include <EEPROM.h>
+
 ///////////////////////////////////////////////////////////////////
 ///////////////////////////////////////   CONSTANT_VARIABLES
 const unsigned char NUM_OF_PARAMETERS = 24;
@@ -92,26 +93,6 @@ void loop() {
     bitWrite(pageNum, 1, bitRead(btnStatesOne, PAGE_TWO_BIT));
   };
   
-//  the two functions below the following two are better I think...
-//  
-//  bool rotarysChangeState() {
-//    
-//    for(unsigned char i=0; i<6;i++) {
-//      if(rotaryVals[i] != rotaryNoChange[i]) {
-//        return true;
-//      } else {
-//          return false;
-//        };
-//    };
-//  };
-//  //  void updateRawVals(unsigned char rawValsArray[]) {
-//   //boolean rotaryChangeState = rot
-//    if (rotarysChangeState()) {
-//      for(unsigned char i=0; i<6; i++) {
-//        rawVals[pageNum*6+i] = rotaryVals[i];
-//      };
-//    };
-//  };
    void rotarysChangeState() {    
       for(unsigned char i=0; i<NUM_OF_ROTARYS; i++) {
         if(rotaryVals[i] != ROTARY_NO_CHANGE[i]) {
@@ -333,11 +314,35 @@ void loop() {
     };        
   };
  
- void kill() {};
- void antiKill() {};
- void overRideKill() {};
- void setKillFirst(boolean state) {};
- void setAntiFirst(boolean state) {}; 
+ void kill() {
+   for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
+     outputVals[i] = defVals[i];
+   };
+ };
+ 
+ void antiKill() {
+   for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
+     outputVals[i] = rawVals[i];
+   };
+ };
+ 
+ void overRideKill() {
+   for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++)  {
+     if(!defStates[i]) {
+       outputVals[i] = rawVals[i];
+     } else {
+         outputVals[i] = defVals[i];
+       };
+   };
+ };
+ 
+ void setKillFirst(unsigned char killAntiKillNum, unsigned char state) {  // not sure how to not sent a copy of killAntiKillNum as opposed to a pointer 
+   bitWrite(killAntiKillNum, 4, state);
+ };
+ 
+ void setAntiFirst(unsigned char killAntiKillNum, unsigned char state) {
+   bitWrite(killAntiKillNum, 5, state);
+ }; 
   
   
   void killAntiKillLogic() {
@@ -346,80 +351,97 @@ void loop() {
     bitWrite(killAntiKillNum, 3, bitRead(killAntiKillNum, 2));      
     bitWrite(killAntiKillNum, 0, bitRead(btnStatesOne, 0));
     bitWrite(killAntiKillNum, 2, bitRead(btnStatesOne, 1));
-    switch (killAntiKillNum) {
+   
+    switch (killAntiKillNum) {  
       
-    case 19:
-     // kill();    |
-    case 47:   //  |
-     // kill();    |
-    case 27:   //  |
-     // kill();    |
-    case 45:   // \/
-      kill();  // falls through to here   
-      break; 
+      case 19:
+        kill(); 
+       break; 
+     
+      case 31:
+       overRideKill();
+       break;
+       
+      case 47:   
+       kill();   
+       break;
+       
+      case 1:
+        kill();
+        setKillFirst(killAntiKillNum, 1);
+        break;
       
-    case 44:
-     // antiKill();
-    case 46:
-      antiKill();
-      break;  
-      
-    case 31:
-     // overRideKill();
-    case 23:
-      overRideKill();
-      break;       
-      
-    case 1:
-      kill();
-      setKillFirst(true);
-      break;
-      
-    case 4:
-      antiKill();
-      setAntiFirst(true);
-      break;
-      
-    case 18:
-      // setkillFirst(false);
-    case 26:
-      setKillFirst(false);
-      break;         
-      
-    case 40:
-      // setAntiFirst(false); 
-    case 42:
-      setAntiFirst(false);
-      break;          
+      case 4:
+        antiKill();
+        setAntiFirst(killAntiKillNum, 1);
+        break;
         
-     case 43:
-      setAntiFirst(false);
-      setKillFirst(true);
-      kill();
-      break;
+      case 18:
+        setKillFirst(killAntiKillNum, 0);
+        break;
+        
+      case 44:
+        antiKill();
+        break;
+       
+      case 23:
+        overRideKill();
+        break;
+        
+      case 27:   
+        kill();
+        break;
+        
+      case 30:
+        antiKill();
+        setKillFirst(killAntiKillNum, 0);
+        setAntiFirst(killAntiKillNum, 1);
+        break; 
+        
+      case 40:
+        setAntiFirst(killAntiKillNum, 0);
+        break;
+        
+      case 43:
+        setAntiFirst(killAntiKillNum, 0);
+        setKillFirst(killAntiKillNum, 1);
+        kill();
+        break;
+        
+      case 45:   
+        kill();   
+        break;     
       
-    case 30:
-      antiKill();
-      setKillFirst(false);
-      setAntiFirst(true);
-      break; 
-      
+      case 46:
+        antiKill();
+        break;       
+        
       case 5:
-      setKillFirst(true);
-      kill();
-      break;
+        setKillFirst(killAntiKillNum, 1);
+        kill();
+        break;
       
-    case 22:
-      setKillFirst(false);
-      setAntiFirst(true);
-      antiKill();
-      break;     
-      
-    case 41:
-      setAntiFirst(false);
-      setKillFirst(true);
-      kill();
-      break;       
+      case 22:
+        setKillFirst(killAntiKillNum, 0);
+        setAntiFirst(killAntiKillNum, 1);
+        antiKill();
+        break;  
+        
+      case 26:
+        setKillFirst(killAntiKillNum, 0);
+        break;     
+       
+      case 42:
+        setAntiFirst(killAntiKillNum, 0);
+        break;     
+        
+      case 41:
+        setAntiFirst(killAntiKillNum, 0);
+        setKillFirst(killAntiKillNum, 1);
+        kill();
+        break;
+        
+      break;      
     };
   };
     
