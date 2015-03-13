@@ -6,11 +6,12 @@
 const unsigned char NUM_OF_PARAMETERS = 24;
 const unsigned char NUM_OF_ROTARYS = 6;
 const unsigned char NUM_OF_PRESETS = 4;
+const unsigned char PARA_TAPER_TYPES[NUM_OF_PARAMETERS] = {0, 0, 0, 1, 0, 2, 1, 1, 1, 0, 0, 2, 2, 1, 1, 1, 0, 0, 1, 2, 1, 1, 0, 1}; // 0 = linear 1 = logrithmatic 2 = anti-logrithmatic
 const unsigned char TAPER_RESOLUTION = 128;
 const unsigned char INIT_PARA_VALS = 125;
-const unsigned char LOG_TAPER_TYPE[TAPER_RESOLUTION] PROGMEM = {};   // will hold an array for log taper adjustment
-//const unsigned char TAPER_ARRAY[3][256];
-const unsigned char ANTI_LOG_TAPER_TYPE[TAPER_RESOLUTION] PROGMEM = {};   // will hold an array for anti-log taper adjstment
+
+
+
 const unsigned char ROTARY_NO_CHANGE[NUM_OF_ROTARYS] = {0, 0, 0, 0, 0, 0};     // a template to check against the current rotary vals, if they are equal then there was no movement on any of the encoders
 const unsigned char ROTARY_STARTUPVALS = 0;
 const unsigned char PRESET_SIZE = NUM_OF_PARAMETERS*3+2;
@@ -48,11 +49,12 @@ unsigned char pageNum;         // holds the current page number
 unsigned char xAssignment;
 unsigned char yAssignment;
 unsigned char presetNum; // holds the number of the current preset
-unsigned char taperedVals[NUM_OF_PARAMETERS];
+//  unsigned char taperedVals[NUM_OF_PARAMETERS];
 unsigned char outputVals[NUM_OF_PARAMETERS]; // the plus one is a page byte which tells the other arduin 
 signed char rotaryVals[NUM_OF_ROTARYS]; // current incremental info on the rotary encoders(how much they've all turned since last loop iteration) these will be added or subtracted from selected parameters rawValue
 boolean defStates[NUM_OF_PARAMETERS];
 int rawVals[NUM_OF_PARAMETERS];     // holds the untapered values of the current parameter[24] values
+unsigned char TAPER_ARRAY[2][256];// this 2d array will hold both the log taper and the anti-log taper which will modify the outputVals to account for differant potentiameter types(linear, audio(log), and anti-log) linear pots dont need to be adjusted so no val array is needed
 
 //typedef struct preset {       // holds the nessassary info for changing to differant presets, holds the last saved stateSave of specific preset number
 //    unsigned char defaultVals[NUM_OF_PARAMETERS];
@@ -63,16 +65,34 @@ int rawVals[NUM_OF_PARAMETERS];     // holds the untapered values of the current
 //  } preset; 
 //  
 //struct preset allPresets[4] PROGMEM;   //presets will actually go to eeprom so they can be altered by the user( will need to use a function to set to and read from eeprom)
-
-void setup() {
+  
 
   
+void setup() {
+  for (unsigned char j = 0; j<2; j++) { // this just creates values for all indexs of the arrays
+    for (unsigned char i=0; i<256; i++){
+          unsigned char temp = i;
+          TAPER_ARRAY[j][i] = i;
+     };
+  };
 }
 
 void loop() {
-
   
-
+  parseSerialData();    // takes in serial parses all ten bytes to correct variables
+  setPageNum();         // takes current serial information and checks what page the user wants
+  rotarysChangeState(); // parses through the rotaryVals array and looks for changes in value(0's equate to no change while negative and positive show how many steps a specific rotary has moved since the last serial iteration
+  setXYVals();          // takes values from the xYInputVals array and changes the corresponding index in the rawVals array 
+  xyAssignmentCheck();  //  does logic determining if either the assignX or assignY buttons were pressed and calles the proper functions
+  setPreset();           // check to see if setPreset button was pressed and if so assigns the current values of the defVals, defStates, rawVals array to correspondoing presetNum eeprom momory space
+  setOutputVals();      // transfers rawVals[] to outputVals[]
+  handleDefaultStates(); // checks if the user if requesting to change the state of any of the defaultStates
+  setDefaultVals();     // checks if the save default button is pressed and if so saves the values of all parameters that are not set to default
+  killAntiKillLogic();  // determins if kill or antikill buttons are pressed and sends the correct values to outputVals
+  applyTaper();         // takes the outputVals[] and sends it through the TAPER_ARRAY according to each paras taper type(0, 1, 2)
+  setTuner();           // determins if the tuner button is engadged and if so sets last iterations values to outputVals
+  setRGBVals();         // 
+  sendOutputVals();
 }
                                 // example serial input {0, 0, 0, 0, -1, 0, 125, 0, b00011000, b10011001 } total of ten bytes
   void parseSerialData() {     // takes incoming serial data and parses it to correct variables for processing
@@ -101,7 +121,18 @@ void loop() {
       };
   };
   
-  boolean isXYTouchActive() {
+  void setRawVals(unsigned char counter) { // used in rotarysChangeState()
+    int rawValsHolder = rawVals[pageNum*NUM_OF_ROTARYS+counter]; 
+    rawValsHolder += rotaryVals[counter];
+    if(rawValsHolder > 255) {    // made rawVals an int so if it goes above 255 or below 0 it doesn't do wierd things it just goes above 255 or below 0 
+      rawValsHolder = 255;       // and then if it is above of below u.c. char levels it sets it back to limits(0-255)
+    } else if(rawValsHolder < 0) {
+      rawValsHolder = 0;
+    };    
+    rawVals[pageNum*NUM_OF_ROTARYS+counter] = rawValsHolder; // did this cuz not sure if (rawValsHolder = rawVals[pageNum*6+counter]) just copies rawVals[pageNum*6+counter] or allows direct minipulation of rawVals[pageNum*6+counter]
+  };  
+  
+  boolean isXYTouchActive() {  // used in setXYVals()
     if(xYInputVals[0]> 2 || xYInputVals[1] > 2){ /// check to see if your touching the touch padf and if not it is disabled and bypassed 
       return true;  // greater then values will be based on what the xypad rest at when not touched
     } else
@@ -121,19 +152,9 @@ void loop() {
     };    
   };
   
-  void setRawVals(unsigned char counter) {
-    int rawValsHolder = rawVals[pageNum*NUM_OF_ROTARYS+counter]; 
-    rawValsHolder += rotaryVals[counter];
-    if(rawValsHolder > 255) {    // made rawVals an int so if it goes above 255 or below 0 it doesn't do wierd things it just goes above 255 or below 0 
-      rawValsHolder = 255;       // and then if it is above of below u.c. char levels it sets it back to limits(0-255)
-    } else if(rawValsHolder < 0) {
-      rawValsHolder = 0;
-    };
-    
-    rawVals[pageNum*NUM_OF_ROTARYS+counter] = rawValsHolder; // did this cuz not sure if (rawValsHolder = rawVals[pageNum*6+counter]) just copies rawVals[pageNum*6+counter] or allows direct minipulation of rawVals[pageNum*6+counter]
-  };
+
   
-  unsigned char checkForBtnClick() {
+  unsigned char checkForBtnClick() {  // used in assignX() and assignY()
     for(unsigned char i = 2; i<8; i++) {
       if(bitRead(btnStatesOne, i)) {
         return i-2;
@@ -142,8 +163,8 @@ void loop() {
     return 0;
   };
   
-  boolean checkForBtnClickBoolean() {
-    for(unsigned char i = 2; i<8; i++) {
+  boolean checkForBtnClickBoolean() {     // used in handleDefaultStates, looks in the btnStatesOne byte which shows rotory btn click info and 
+    for(unsigned char i = 2; i<8; i++) {  // returns true if any of the rotorys were clicked in the current iteration
       if(bitRead(btnStatesOne, i)) {
         return i;
       };
@@ -151,30 +172,19 @@ void loop() {
     return 0;
   };
   
-  void assignX() {
-    unsigned char btnClk = checkForBtnClick(); 
+  void assignX() { // used in xyAssignmentCheck(), it checks the btnStatesOne array for a btn click and assigns the xAssignment variable to the parameter number
+    unsigned char btnClk = checkForBtnClick(); // that the rotary click represents
     if(btnClk > 0) {
       xAssignment = pageNum*NUM_OF_ROTARYS+btnClk; // produces 0 -24
     };
   };
   
-  void assignY() {
-    unsigned char btnClk = checkForBtnClick(); 
+  void assignY() {  // used in xyAssignmentCheck(), it checks the btnStatesOne array for a btn click and assigns the yAssignment variable to the parameter number
+    unsigned char btnClk = checkForBtnClick(); // that the found rotary click represents
     if(btnClk > 0) {
       yAssignment = pageNum*NUM_OF_ROTARYS+btnClk;
     }; 
   }
-  
-  boolean checkXYAsignState() {
-    boolean xState = bitRead(btnStatesTwo, ASSIGN_X_BIT);
-    boolean yState = bitRead(btnStatesTwo, ASSIGN_Y_BIT);
-    if(xState)
-      return true;
-    else if(yState) 
-      return true;
-    else 
-      return false;   
-  };
   
   void xyAssignmentCheck() {
     static unsigned char xOrYFirst = 0; // 0 = neither 1 = xFirst 2 = yFirst
@@ -185,35 +195,29 @@ void loop() {
     bitWrite(currentXYState, 1, bitRead(btnStatesTwo, ASSIGN_Y_BIT)); // 1 bit = yAssign
     switch (currentXYState) {
       case 0:
-        //do nothing
-        //xOrYFirst = 0;
+        xOrYFirst = 0;
         lastXYState = currentXYState;
         break;
-      
       case 1:
-      // check for default btn click 
-        assignX();                             // also need to make function
+        assignX();                             
         xOrYFirst = 1;
         lastXYState = currentXYState;
         break;
-      
       case 2:
         // ckeck for default btn click
-        assignY();                             // also need to make function
+        assignY();                             
         xOrYFirst = 2;
         lastXYState = currentXYState;
         break;
-      
       case 3:
-        //do something when var equals 1
         switch (lastXYState) {
           case 0:
-            assignX();                             // also need to make function
+            assignX();                            
             xOrYFirst = 1;
             lastXYState = currentXYState;
             break;
           case 1:
-            assignY();                             // also need to make function
+            assignY();                            
             lastXYState = currentXYState;
             break;
           case 2:
@@ -232,7 +236,7 @@ void loop() {
     };
   };
   
-  boolean checkPresetState() {
+  boolean checkPresetState() { // used in setPreset(), returns true if the preset btn was pressed 
     return bitRead(btnStatesTwo, SAVE_PRESET_BIT);
   };
   
@@ -254,7 +258,7 @@ void loop() {
     };
   };
   
-  boolean checkSaveDefState() {
+  boolean checkSaveDefState() { // used in setDefaultVals();
     return bitRead(btnStatesTwo, SAVE_DEFAULT_BIT);
   };
   
@@ -267,6 +271,17 @@ void loop() {
       };
     };
       
+  };
+  
+  boolean checkXYAsignState() { // used in handleDefaultStates();
+    boolean xState = bitRead(btnStatesTwo, ASSIGN_X_BIT);
+    boolean yState = bitRead(btnStatesTwo, ASSIGN_Y_BIT);
+    if(xState)
+      return true;
+    else if(yState) 
+      return true;
+    else 
+      return false;   
   };
   
   void handleDefaultStates() {
@@ -285,48 +300,53 @@ void loop() {
   
   void setTuner() {
     if(checkTunerState()) {
-      /// what to doooooo?
+//      for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {  this is what is visually does but it doesn't need to do anything
+//        outputVlas[i] = outputVals[i];                      nothing is done really but information on changes from the rotaries and the pageNum and xyASssign and xYHold
+//      };                                                    and changes to default states and default values, saving presets would also be nice because the process heavy setPreset() wouldnt effect the output(but idk its all speculation)
     };
   };
   
-  boolean checkXYHoldState() {
+  boolean checkXYHoldState() { // used in setXYVals(), simply returns wether the xyHold button is pressed or not
     return bitRead(btnStatesTwo, XY_HOLD_BIT);
   };
   
-  void setXYHold() {    
-      rawVals[xAssignment] = xYInputVals[2];
-      rawVals[yAssignment] = xYInputVals[3];
+  void setXYHold() { // used in setXYVals(), used if the xyHold button if engadged, it takes the value of the last iteration of xYInputVals and copies it to the current iteration 
+      rawVals[xAssignment] = xYInputVals[2]; // this allows the user to push the xyHold button when they find an xy val sound that they like and be able to put their hand of the xy pad 
+      rawVals[yAssignment] = xYInputVals[3]; // while the values stay were the user last had them
   };
   
-  boolean checkKillState() {
-    return bitRead(btnStatesOne, KILL_BIT);
-  };
-  
-  boolean checkAntiKillState() {
-    return bitRead(btnStatesOne, ANTI_KILL_BIT);
-  };
+//  boolean checkKillState() { // used in setOutputVals()
+//    return bitRead(btnStatesOne, KILL_BIT);
+//  };
+//  
+//  boolean checkAntiKillState() { // used in setOutputVals()
+//    return bitRead(btnStatesOne, ANTI_KILL_BIT);
+//  };
   
   void setOutputVals() {
-    unsigned char killState = checkKillState();
-    unsigned char antiKillState = checkAntiKillState();
     for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-      outputVals[i] = taperedVals[i];
+      outputVals[i] = rawVals[i];
     };        
   };
+  void cleanOutput() {
+    for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
+      outputVals[i] = rawVals[i];
+    };
+  };
  
- void kill() {
+ void kill() {  // used in killANtiKillLogic()
    for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
      outputVals[i] = defVals[i];
    };
  };
  
- void antiKill() {
+ void antiKill() {  // used in killANtiKillLogic()
    for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
      outputVals[i] = rawVals[i];
    };
  };
  
- void overRideKill() {
+ void overRideKill() {  // used in killANtiKillLogic()
    for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++)  {
      if(!defStates[i]) {
        outputVals[i] = rawVals[i];
@@ -336,11 +356,11 @@ void loop() {
    };
  };
  
- void setKillFirst(unsigned char killAntiKillNum, unsigned char state) {  // not sure how to not sent a copy of killAntiKillNum as opposed to a pointer 
-   bitWrite(killAntiKillNum, 4, state);
+ void setKillFirst(unsigned char killAntiKillNum, unsigned char state) {  // used in killANtiKillLogic()   
+   bitWrite(killAntiKillNum, 4, state);  // not sure how to not sent a copy of killAntiKillNum as opposed to a pointer 
  };
  
- void setAntiFirst(unsigned char killAntiKillNum, unsigned char state) {
+ void setAntiFirst(unsigned char killAntiKillNum, unsigned char state) {  // used in killANtiKillLogic()
    bitWrite(killAntiKillNum, 5, state);
  }; 
   
@@ -351,97 +371,99 @@ void loop() {
     bitWrite(killAntiKillNum, 3, bitRead(killAntiKillNum, 2));      
     bitWrite(killAntiKillNum, 0, bitRead(btnStatesOne, 0));
     bitWrite(killAntiKillNum, 2, bitRead(btnStatesOne, 1));
-   
-    switch (killAntiKillNum) {  
-      
-      case 19:
-        kill(); 
-       break; 
-     
-      case 31:
-       overRideKill();
-       break;
-       
-      case 47:   
-       kill();   
-       break;
-       
-      case 1:
-        kill();
-        setKillFirst(killAntiKillNum, 1);
+    if(!checkTunerState()) {
+      switch (killAntiKillNum) {    // switch case is optimized so most common nums are higher in the switch case order, so like the num 19; which can be thought of as killFirst(true), lastKill(high), currentKill(high) is high up the chain
+                                   // because when you push killSwitch on it will likely be on for many iterations so it is a high importance number 
+        case 0:
+        cleanOutput();
         break;
-      
-      case 4:
-        antiKill();
-        setAntiFirst(killAntiKillNum, 1);
-        break;
-        
-      case 18:
-        setKillFirst(killAntiKillNum, 0);
-        break;
-        
-      case 44:
-        antiKill();
-        break;
-       
-      case 23:
-        overRideKill();
-        break;
-        
-      case 27:   
-        kill();
-        break;
-        
-      case 30:
-        antiKill();
-        setKillFirst(killAntiKillNum, 0);
-        setAntiFirst(killAntiKillNum, 1);
-        break; 
-        
-      case 40:
-        setAntiFirst(killAntiKillNum, 0);
-        break;
-        
-      case 43:
-        setAntiFirst(killAntiKillNum, 0);
-        setKillFirst(killAntiKillNum, 1);
-        kill();
-        break;
-        
-      case 45:   
-        kill();   
-        break;     
-      
-      case 46:
-        antiKill();
-        break;       
-        
-      case 5:
-        setKillFirst(killAntiKillNum, 1);
-        kill();
-        break;
-      
-      case 22:
-        setKillFirst(killAntiKillNum, 0);
-        setAntiFirst(killAntiKillNum, 1);
-        antiKill();
-        break;  
-        
-      case 26:
-        setKillFirst(killAntiKillNum, 0);
-        break;     
-       
-      case 42:
-        setAntiFirst(killAntiKillNum, 0);
-        break;     
-        
-      case 41:
-        setAntiFirst(killAntiKillNum, 0);
-        setKillFirst(killAntiKillNum, 1);
-        kill();
-        break;
-        
-      break;      
+        case 19:
+          kill(); 
+          break; 
+        case 31:
+          overRideKill();
+          break;
+        case 47:   
+          kill();   
+          break;
+        case 1:
+          kill();
+          setKillFirst(killAntiKillNum, 1);
+          break;
+        case 4:
+          antiKill();
+          setAntiFirst(killAntiKillNum, 1);
+          break;
+        case 18:
+          cleanOutput();
+          setKillFirst(killAntiKillNum, 0);
+          break;
+        case 44:
+          antiKill();
+          break;
+        case 23:
+          overRideKill();
+          break;
+        case 27:   
+          kill();
+          break;
+        case 30:
+          antiKill();
+          setKillFirst(killAntiKillNum, 0);
+          setAntiFirst(killAntiKillNum, 1);
+          break; 
+        case 40:
+          cleanOutput();
+          setAntiFirst(killAntiKillNum, 0);
+          break;
+        case 43:
+          setAntiFirst(killAntiKillNum, 0);
+          setKillFirst(killAntiKillNum, 1);
+          kill();
+          break;
+        case 45:   
+          kill();   
+          break; 
+        case 46:
+          antiKill();
+          break;  
+        case 5:
+          setKillFirst(killAntiKillNum, 1);
+          kill();
+          break;
+        case 22:
+          setKillFirst(killAntiKillNum, 0);
+          setAntiFirst(killAntiKillNum, 1);
+          antiKill();
+          break;
+        case 26:
+          cleanOutput();
+          setKillFirst(killAntiKillNum, 0);
+          break;  
+        case 42:
+          setAntiFirst(killAntiKillNum, 0);
+          break;   
+        case 41:
+          setAntiFirst(killAntiKillNum, 0);
+          setKillFirst(killAntiKillNum, 1);
+          kill();
+          break;
+         break;      // not sure if this does anything
+      };
+    };    
+  };
+  void applyTaper() {
+    for(unsigned char i = 0; i<NUM_OF_PARAMETERS;i++) {
+      switch(PARA_TAPER_TYPES[i]) {
+        case 0:
+          break;
+        case 1:
+          outputVals[i] = TAPER_ARRAY[0][outputVals[i]];
+          break;
+        case 2:
+          outputVals[i] = TAPER_ARRAY[1][outputVals[i]];
+          break;
+      };
     };
   };
     
@@ -486,7 +508,7 @@ void loop() {
      void setRGBVals() {
       for(unsigned char i = 0; i<NUM_OF_ROTARYS;i++) {
         for(unsigned char j = 0; j<3; j++) {
-          rGBOutputs[(i*3)+j] = rGBTemplateArray[taperedVals[pageNum*6+i]+j];
+          rGBOutputs[(i*3)+j] = rGBTemplateArray[outputVals[pageNum*6+i]+j];
         };
       };
     };
