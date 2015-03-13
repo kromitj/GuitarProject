@@ -55,7 +55,7 @@ signed char rotaryVals[NUM_OF_ROTARYS]; // current incremental info on the rotar
 boolean defStates[NUM_OF_PARAMETERS];
 int rawVals[NUM_OF_PARAMETERS];     // holds the untapered values of the current parameter[24] values
 unsigned char TAPER_ARRAY[2][256];// this 2d array will hold both the log taper and the anti-log taper which will modify the outputVals to account for differant potentiameter types(linear, audio(log), and anti-log) linear pots dont need to be adjusted so no val array is needed
-
+bool tunerState = false;
 //typedef struct preset {       // holds the nessassary info for changing to differant presets, holds the last saved stateSave of specific preset number
 //    unsigned char defaultVals[NUM_OF_PARAMETERS];
 //    boolean defaultStates[NUM_OF_PARAMETERS];
@@ -93,7 +93,25 @@ void loop() {
   setTuner();           // determins if the tuner button is engadged and if so sets last iterations values to outputVals
   setRGBVals();         // 
   sendOutputVals();
-}
+};
+
+//void handleStateChanges() {
+  //setPageNum();
+  //xyAssignment();
+  //setDefaultVals();
+  //setPreset();
+  //handleDefaultStates();
+//};
+
+void handleParaValueLogic() {
+  rotarysChangeState();
+  setXYVales();
+  setOutputVals();
+  setTuner(); // need to make it so if this is true the kill anti kill dont change the outputVals but still maintain the 6 bit logic num
+  killAntiKillLogic();
+  applyTaper();
+ 
+};
                                 // example serial input {0, 0, 0, 0, -1, 0, 125, 0, b00011000, b10011001 } total of ten bytes
   void parseSerialData() {     // takes incoming serial data and parses it to correct variables for processing
     if (Serial.available() > 0) {
@@ -300,9 +318,9 @@ void loop() {
   
   void setTuner() {
     if(checkTunerState()) {
-//      for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {  this is what is visually does but it doesn't need to do anything
-//        outputVlas[i] = outputVals[i];                      nothing is done really but information on changes from the rotaries and the pageNum and xyASssign and xYHold
-//      };                                                    and changes to default states and default values, saving presets would also be nice because the process heavy setPreset() wouldnt effect the output(but idk its all speculation)
+      tunerState = true;                                                  
+    } else {
+       tunerState = false;
     };
   };
   
@@ -375,78 +393,79 @@ void loop() {
       switch (killAntiKillNum) {    // switch case is optimized so most common nums are higher in the switch case order, so like the num 19; which can be thought of as killFirst(true), lastKill(high), currentKill(high) is high up the chain
                                    // because when you push killSwitch on it will likely be on for many iterations so it is a high importance number 
         case 0:
-        cleanOutput();
-        break;
+          if(!tunerState) {cleanOutput();};
+          break;
         case 19:
-          kill(); 
+          if(!tunerState) {kill();};
           break; 
         case 31:
-          overRideKill();
+          if(!tunerState) {overRideKill();};
           break;
         case 47:   
-          kill();   
+          if(!tunerState) {kill();};   
           break;
         case 1:
-          kill();
+          if(!tunerState) {kill();};
           setKillFirst(killAntiKillNum, 1);
           break;
         case 4:
-          antiKill();
+          if(!tunerState) {antiKill();};
           setAntiFirst(killAntiKillNum, 1);
           break;
         case 18:
-          cleanOutput();
+          if(!tunerState) {cleanOutput();};
           setKillFirst(killAntiKillNum, 0);
           break;
         case 44:
-          antiKill();
+          if(!tunerState) {antiKill();};
+          
           break;
         case 23:
-          overRideKill();
+          if(!tunerState) {overRideKill();};
           break;
         case 27:   
-          kill();
+          if(!tunerState) {kill();};
           break;
         case 30:
-          antiKill();
+          if(!tunerState) {antiKill();};
           setKillFirst(killAntiKillNum, 0);
           setAntiFirst(killAntiKillNum, 1);
           break; 
         case 40:
-          cleanOutput();
+          if(!tunerState) {cleanOutput();};
           setAntiFirst(killAntiKillNum, 0);
           break;
         case 43:
+          if(!tunerState) {kill();};
           setAntiFirst(killAntiKillNum, 0);
           setKillFirst(killAntiKillNum, 1);
-          kill();
           break;
         case 45:   
-          kill();   
+          if(!tunerState) {kill();};
           break; 
         case 46:
-          antiKill();
+          if(!tunerState) {antiKill();};
           break;  
         case 5:
+          if(!tunerState) {kill();};
           setKillFirst(killAntiKillNum, 1);
-          kill();
           break;
         case 22:
+          if(!tunerState) {antiKill();};
           setKillFirst(killAntiKillNum, 0);
           setAntiFirst(killAntiKillNum, 1);
-          antiKill();
           break;
         case 26:
-          cleanOutput();
+          if(!tunerState) {cleanOutput();};
           setKillFirst(killAntiKillNum, 0);
           break;  
         case 42:
           setAntiFirst(killAntiKillNum, 0);
           break;   
         case 41:
+          if(!tunerState) {kill();};
           setAntiFirst(killAntiKillNum, 0);
           setKillFirst(killAntiKillNum, 1);
-          kill();
           break;
          break;      // not sure if this does anything
       };
