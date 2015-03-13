@@ -56,6 +56,7 @@ boolean defStates[NUM_OF_PARAMETERS];
 int rawVals[NUM_OF_PARAMETERS];     // holds the untapered values of the current parameter[24] values
 unsigned char TAPER_ARRAY[2][256];// this 2d array will hold both the log taper and the anti-log taper which will modify the outputVals to account for differant potentiameter types(linear, audio(log), and anti-log) linear pots dont need to be adjusted so no val array is needed
 bool tunerState = false;
+unsigned char lastOutputVals[NUM_OF_PARAMETERS];
 //typedef struct preset {       // holds the nessassary info for changing to differant presets, holds the last saved stateSave of specific preset number
 //    unsigned char defaultVals[NUM_OF_PARAMETERS];
 //    boolean defaultStates[NUM_OF_PARAMETERS];
@@ -81,16 +82,17 @@ void loop() {
   
   parseSerialData();    // takes in serial parses all ten bytes to correct variables
   setPageNum();         // takes current serial information and checks what page the user wants
-  rotarysChangeState(); // parses through the rotaryVals array and looks for changes in value(0's equate to no change while negative and positive show how many steps a specific rotary has moved since the last serial iteration
-  setXYVals();          // takes values from the xYInputVals array and changes the corresponding index in the rawVals array 
+  rotarysChangeState(); // parses through the rotaryVals array and looks for changes in value(0's equate to no change while negative and positive show how many steps a specific rotary has moved since the last serial iteration  
   xyAssignmentCheck();  //  does logic determining if either the assignX or assignY buttons were pressed and calles the proper functions
-  setPreset();           // check to see if setPreset button was pressed and if so assigns the current values of the defVals, defStates, rawVals array to correspondoing presetNum eeprom momory space
-  setOutputVals();      // transfers rawVals[] to outputVals[]
+  setPreset();           // check to see if setPreset button was pressed and if so assigns the current values of the defVals, defStates, rawVals array to correspondoing presetNum eeprom momory space  
   handleDefaultStates(); // checks if the user if requesting to change the state of any of the defaultStates
-  setDefaultVals();     // checks if the save default button is pressed and if so saves the values of all parameters that are not set to default
-  killAntiKillLogic();  // determins if kill or antikill buttons are pressed and sends the correct values to outputVals
-  applyTaper();         // takes the outputVals[] and sends it through the TAPER_ARRAY according to each paras taper type(0, 1, 2)
+  setDefaultVals();    // checks if the save default button is pressed and if so saves the values of all parameters that are not set to default     
+  setXYVals();          // takes values from the xYInputVals array and changes the corresponding index in the rawVals array 
+  setOutputVals();    // transfers rawVals[] to outputVals[]
   setTuner();           // determins if the tuner button is engadged and if so sets last iterations values to outputVals
+                        // need a function that assigns the defaultVals to paras with default activated
+  killAntiKillLogic();  // determins if kill or antikill buttons are pressed and sends the correct values to outputVals
+  applyTaper();         // takes the outputVals[] and sends it through the TAPER_ARRAY according to each paras taper type(0, 1, 2)  
   setRGBVals();         // 
   sendOutputVals();
 };
@@ -103,15 +105,15 @@ void loop() {
   //handleDefaultStates();
 //};
 
-void handleParaValueLogic() {
-  rotarysChangeState();
-  setXYVales();
-  setOutputVals();
-  setTuner(); // need to make it so if this is true the kill anti kill dont change the outputVals but still maintain the 6 bit logic num
-  killAntiKillLogic();
-  applyTaper();
- 
-};
+//void handleParaValueLogic() {
+//  rotarysChangeState();
+//  setXYVales();
+//  setOutputVals();
+//  setTuner(); // need to make it so if this is true the kill anti kill dont change the outputVals but still maintain the 6 bit logic num
+//  killAntiKillLogic();
+//  applyTaper();
+// 
+//};
                                 // example serial input {0, 0, 0, 0, -1, 0, 125, 0, b00011000, b10011001 } total of ten bytes
   void parseSerialData() {     // takes incoming serial data and parses it to correct variables for processing
     if (Serial.available() > 0) {
@@ -291,7 +293,7 @@ void handleParaValueLogic() {
       
   };
   
-  boolean checkXYAsignState() { // used in handleDefaultStates();
+  boolean checkXYAsignState() { // used in handleDefaultStates(), this is used because when you assign a para to x or y on the touch pad you choose which para you want by clicking the proper rotary
     boolean xState = bitRead(btnStatesTwo, ASSIGN_X_BIT);
     boolean yState = bitRead(btnStatesTwo, ASSIGN_Y_BIT);
     if(xState)
@@ -312,12 +314,12 @@ void handleParaValueLogic() {
     };
   };
   
-  boolean checkTunerState() {
-   return bitRead(btnStatesTwo, TUNER_BIT);
-  };
-  
   void setTuner() {
-    if(checkTunerState()) {
+    boolean checkTunerState = bitRead(btnStatesTwo, TUNER_BIT);
+    if(checkTunerState) {
+      for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
+        outputVals[i] = lastOutputVals[i];
+      };
       tunerState = true;                                                  
     } else {
        tunerState = false;
@@ -333,32 +335,29 @@ void handleParaValueLogic() {
       rawVals[yAssignment] = xYInputVals[3]; // while the values stay were the user last had them
   };
   
-//  boolean checkKillState() { // used in setOutputVals()
-//    return bitRead(btnStatesOne, KILL_BIT);
-//  };
-//  
-//  boolean checkAntiKillState() { // used in setOutputVals()
-//    return bitRead(btnStatesOne, ANTI_KILL_BIT);
-//  };
-  
   void setOutputVals() {
     for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-      outputVals[i] = rawVals[i];
+      if(defStates) {
+        outputVals[i] = defVals[i];
+      } else {
+        outputVals[i] = rawVals[i];
+      };
+      
     };        
   };
-  void cleanOutput() {
-    for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-      outputVals[i] = rawVals[i];
-    };
-  };
+//    void cleanOutput() {  // i dont think this function is needed it doesnt do anything outputVals[] are all ready equal to rawVals[]
+//      for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
+//        outputVals[i] = rawVals[i];
+//      };
+//    };
  
- void kill() {  // used in killANtiKillLogic()
+ void kill() {  // used in killANtiKillLogic() sets all outputVals[] to the paras default vals
    for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
      outputVals[i] = defVals[i];
    };
  };
  
- void antiKill() {  // used in killANtiKillLogic()
+ void antiKill() {  // used in killANtiKillLogic() sets all outPutVals[] to the rawVals
    for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
      outputVals[i] = rawVals[i];
    };
@@ -388,106 +387,109 @@ void handleParaValueLogic() {
     bitWrite(killAntiKillNum, 1, bitRead(killAntiKillNum, 0));
     bitWrite(killAntiKillNum, 3, bitRead(killAntiKillNum, 2));      
     bitWrite(killAntiKillNum, 0, bitRead(btnStatesOne, 0));
-    bitWrite(killAntiKillNum, 2, bitRead(btnStatesOne, 1));
-    if(!checkTunerState()) {
-      switch (killAntiKillNum) {    // switch case is optimized so most common nums are higher in the switch case order, so like the num 19; which can be thought of as killFirst(true), lastKill(high), currentKill(high) is high up the chain
-                                   // because when you push killSwitch on it will likely be on for many iterations so it is a high importance number 
-        case 0:
-          if(!tunerState) {cleanOutput();};
-          break;
-        case 19:
-          if(!tunerState) {kill();};
-          break; 
-        case 31:
-          if(!tunerState) {overRideKill();};
-          break;
-        case 47:   
-          if(!tunerState) {kill();};   
-          break;
-        case 1:
-          if(!tunerState) {kill();};
-          setKillFirst(killAntiKillNum, 1);
-          break;
-        case 4:
-          if(!tunerState) {antiKill();};
-          setAntiFirst(killAntiKillNum, 1);
-          break;
-        case 18:
-          if(!tunerState) {cleanOutput();};
-          setKillFirst(killAntiKillNum, 0);
-          break;
-        case 44:
-          if(!tunerState) {antiKill();};
-          
-          break;
-        case 23:
-          if(!tunerState) {overRideKill();};
-          break;
-        case 27:   
-          if(!tunerState) {kill();};
-          break;
-        case 30:
-          if(!tunerState) {antiKill();};
-          setKillFirst(killAntiKillNum, 0);
-          setAntiFirst(killAntiKillNum, 1);
-          break; 
-        case 40:
-          if(!tunerState) {cleanOutput();};
-          setAntiFirst(killAntiKillNum, 0);
-          break;
-        case 43:
-          if(!tunerState) {kill();};
-          setAntiFirst(killAntiKillNum, 0);
-          setKillFirst(killAntiKillNum, 1);
-          break;
-        case 45:   
-          if(!tunerState) {kill();};
-          break; 
-        case 46:
-          if(!tunerState) {antiKill();};
-          break;  
-        case 5:
-          if(!tunerState) {kill();};
-          setKillFirst(killAntiKillNum, 1);
-          break;
-        case 22:
-          if(!tunerState) {antiKill();};
-          setKillFirst(killAntiKillNum, 0);
-          setAntiFirst(killAntiKillNum, 1);
-          break;
-        case 26:
-          if(!tunerState) {cleanOutput();};
-          setKillFirst(killAntiKillNum, 0);
-          break;  
-        case 42:
-          setAntiFirst(killAntiKillNum, 0);
-          break;   
-        case 41:
-          if(!tunerState) {kill();};
-          setAntiFirst(killAntiKillNum, 0);
-          setKillFirst(killAntiKillNum, 1);
-          break;
-         break;      // not sure if this does anything
+    bitWrite(killAntiKillNum, 2, bitRead(btnStatesOne, 1));    
+    switch (killAntiKillNum) {    // switch case is optimized so most common nums are higher in the switch case order, so like the num 19; which can be thought of as killFirst(true), lastKill(high), currentKill(high) is high up the chain
+                                 // because when you push killSwitch on it will likely be on for many iterations so it is a high importance number 
+      case 0:
+      //  if(!tunerState) {cleanOutput();};
+        break;
+      case 19:
+        if(!tunerState) {kill();};
+        break; 
+      case 31:
+        if(!tunerState) {overRideKill();};
+        break;
+      case 47:   
+        if(!tunerState) {kill();};   
+        break;
+      case 1:
+        if(!tunerState) {kill();};
+        setKillFirst(killAntiKillNum, 1);
+        break;
+      case 4:
+        if(!tunerState) {antiKill();};
+        setAntiFirst(killAntiKillNum, 1);
+        break;
+      case 18:
+   //     if(!tunerState) {cleanOutput();};
+        setKillFirst(killAntiKillNum, 0);
+        break;
+      case 44:
+        if(!tunerState) {antiKill();};
+        
+        break;
+      case 23:
+        if(!tunerState) {overRideKill();};
+        break;
+      case 27:   
+        if(!tunerState) {kill();};
+        break;
+      case 30:
+        if(!tunerState) {antiKill();};
+        setKillFirst(killAntiKillNum, 0);
+        setAntiFirst(killAntiKillNum, 1);
+        break; 
+      case 40:
+  //      if(!tunerState) {cleanOutput();};
+        setAntiFirst(killAntiKillNum, 0);
+        break;
+      case 43:
+        if(!tunerState) {kill();};
+        setAntiFirst(killAntiKillNum, 0);
+        setKillFirst(killAntiKillNum, 1);
+        break;
+      case 45:   
+        if(!tunerState) {kill();};
+        break; 
+      case 46:
+        if(!tunerState) {antiKill();};
+        break;  
+      case 5:
+        if(!tunerState) {kill();};
+        setKillFirst(killAntiKillNum, 1);
+        break;
+      case 22:
+        if(!tunerState) {antiKill();};
+        setKillFirst(killAntiKillNum, 0);
+        setAntiFirst(killAntiKillNum, 1);
+        break;
+      case 26:
+   //     if(!tunerState) {cleanOutput();};
+        setKillFirst(killAntiKillNum, 0);
+        break;  
+      case 42:
+        setAntiFirst(killAntiKillNum, 0);
+        break;   
+      case 41:
+        if(!tunerState) {kill();};
+        setAntiFirst(killAntiKillNum, 0);
+        setKillFirst(killAntiKillNum, 1);
+        break;
+       break;      // not sure if this does anything
+    };    
+  };
+  void applyTaper() {        
+    if(!tunerState) {
+      for(unsigned char i = 0; i<NUM_OF_PARAMETERS;i++) {
+        switch(PARA_TAPER_TYPES[i]) {
+          case 0:
+            break;
+          case 1:
+            outputVals[i] = TAPER_ARRAY[0][outputVals[i]];
+            break;
+          case 2:
+            outputVals[i] = TAPER_ARRAY[1][outputVals[i]];
+            break;
+        };
       };
     };    
   };
-  void applyTaper() {
-    for(unsigned char i = 0; i<NUM_OF_PARAMETERS;i++) {
-      switch(PARA_TAPER_TYPES[i]) {
-        case 0:
-          break;
-        case 1:
-          outputVals[i] = TAPER_ARRAY[0][outputVals[i]];
-          break;
-        case 2:
-          outputVals[i] = TAPER_ARRAY[1][outputVals[i]];
-          break;
-      };
-    };
-  };
     
     void sendOutputVals() {
-      for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
+      for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) { 
+        if(!tunerState) {
+          lastOutputVals[i] = outputVals[i];
+        };        
         Serial.write(outputVals[i]);
       };
     };  
