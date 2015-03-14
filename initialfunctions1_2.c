@@ -6,6 +6,7 @@
 const unsigned char NUM_OF_PARAMETERS = 24;
 const unsigned char NUM_OF_ROTARYS = 6;
 const unsigned char NUM_OF_PRESETS = 4;
+const unsigned char DEBOUNCE_NUM = 15;
 
 const unsigned char INIT_PARA_VALS = 125;
 const unsigned char ROTARY_STARTUPVALS = 0;
@@ -262,36 +263,47 @@ void setXYVals() {
   };
   
     void setPreset() {
-    static boolean presetLoopFilter = false; // keeps program from iteratind the eeprom writes over repeatedly
-    if (checkPresetState()) {               // with this it will only write once per button push
-      if(!presetLoopFilter){
-        for(unsigned char i=0; i<NUM_OF_PARAMETERS; i++) {      // copies 74 bytes of data to eeprom
-          EEPROM.write(presetNum*PRESET_SIZE+i, defVals[i]);
-          EEPROM.write(NUM_OF_PARAMETERS+(presetNum*PRESET_SIZE+i), defStates[i]);
-          EEPROM.write((NUM_OF_PARAMETERS*2)+(presetNum*PRESET_SIZE+i), rawVals[i]);        
-        };
-        EEPROM.write((NUM_OF_PARAMETERS*3)+(presetNum*PRESET_SIZE), xAssignment);
-        EEPROM.write((NUM_OF_PARAMETERS*3)+(presetNum*PRESET_SIZE)+1, yAssignment);
-        presetLoopFilter = true;
-      };
-    } else {
+     static presetDebouncer = 0;
+     static boolean presetLoopFilter = false; // keeps program from iteratind the eeprom writes over repeatedly
+     if (checkPresetState()) {               // with this it will only write once per button push
+       presetDebouncer++;
+       if(presetDebouncer>DEBOUNCE_NUM){
+         if(!presetLoopFilter){
+           for(unsigned char i=0; i<NUM_OF_PARAMETERS; i++) {      // copies 74 bytes of data to eeprom
+             EEPROM.write(presetNum*PRESET_SIZE+i, defVals[i]);
+             EEPROM.write(NUM_OF_PARAMETERS+(presetNum*PRESET_SIZE+i), defStates[i]);
+             EEPROM.write((NUM_OF_PARAMETERS*2)+(presetNum*PRESET_SIZE+i), rawVals[i]);        
+           };
+             EEPROM.write((NUM_OF_PARAMETERS*3)+(presetNum*PRESET_SIZE), xAssignment);
+             EEPROM.write((NUM_OF_PARAMETERS*3)+(presetNum*PRESET_SIZE)+1, yAssignment);
+             presetLoopFilter = true;
+             presetDeboucer = 0;
+         };
+       } else {
         presetLoopFilter = false; 
-    };
-  };
+       };
+     };
+   };
   
   boolean checkSaveDefState() { // used in setDefaultVals();
     return bitRead(btnStatesTwo, SAVE_DEFAULT_BIT);
   };
   
   void setDefaultVals() {
+    static unsigned char saveDefaultsDebounce = 0;
     if(checkSaveDefState()) {
-      for(unsigned char i = 0; 0<NUM_OF_PARAMETERS; i++) {
-        if(defStates[i] = false) {
-          defVals[i] = rawVals[i];
-        };
-      };
+     saveDefaultsDebounce++;
+     if(saveDefaultDebounce>DEBOUNCE_NUM) {
+       saveDefaultDebounce = 0;
+       for(unsigned char i = 0; 0<NUM_OF_PARAMETERS; i++) {
+         if(activeParas[i]) {
+           if(defStates[i] = false) {
+             defVals[i] = rawVals[i];
+           };
+         };
+       };
+     };
     };
-      
   };
   
   boolean checkXYAsignState() { // used in handleDefaultStates(), this is used because when you assign a para to x or y on the touch pad you choose which para you want by clicking the proper rotary
@@ -306,9 +318,9 @@ void setXYVals() {
   };
   
   void handleDefaultStates() {
-    if (checkXYAsignState() != true) {
-      if(checkForBtnClickBoolean()) {
-        for(unsigned char i = 0; i<NUM_OF_ROTARYS; i++) {
+    if (!checkXYAsignState()) {
+      for(unsigned char i = 0; i<NUM_OF_ROTARYS; i++) {
+        if(activeParas[i]) {
           defStates[pageNum*6+i] = bitRead(btnStatesOne, i+2);
         };
       };
@@ -319,7 +331,9 @@ void setXYVals() {
     boolean checkTunerState = bitRead(btnStatesTwo, TUNER_BIT);
     if(checkTunerState) {
       for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-        outputVals[i] = lastOutputVals[i];
+        if(activeParas[i]) {
+          outputVals[i] = lastOutputVals[i];
+        };
       };
       tunerState = true;                                                  
     } else {
@@ -338,39 +352,43 @@ void setXYVals() {
   
   void setOutputVals() {
     for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-      if(defStates) {
+     if(activeParas[i]) {
+       if(defStates[1]) {
         outputVals[i] = defVals[i];
       } else {
         outputVals[i] = rawVals[i];
       };
       
+     };
+      
     };        
   };
-//    void cleanOutput() {  // i dont think this function is needed it doesnt do anything outputVals[] are all ready equal to rawVals[]
-//      for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-//        outputVals[i] = rawVals[i];
-//      };
-//    };
  
  void kill() {  // used in killANtiKillLogic() sets all outputVals[] to the paras default vals
    for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-     outputVals[i] = defVals[i];
+     if(activeParas[i]) {
+       outputVals[i] = defVals[i];
+     };
    };
  };
  
  void antiKill() {  // used in killANtiKillLogic() sets all outPutVals[] to the rawVals
    for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-     outputVals[i] = rawVals[i];
+     if(activeParas[i]) {
+       outputVals[i] = rawVals[i];
+     };
    };
  };
  
  void overRideKill() {  // used in killANtiKillLogic()
    for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++)  {
-     if(!defStates[i]) {
-       outputVals[i] = rawVals[i];
+     if(activeParas[i]) {
+       if(!defStates[i]) {
+         outputVals[i] = rawVals[i];
      } else {
          outputVals[i] = defVals[i];
        };
+     };
    };
  };
  
@@ -395,20 +413,22 @@ void setXYVals() {
       //  if(!tunerState) {cleanOutput();};
         break;
       case 19:
-        if(!tunerState) {kill();};
+        if(!tunerState) {
+          currentOverride = KILL;
+        };
         break; 
       case 31:
-        if(!tunerState) {overRideKill();};
+        if(!tunerState) {currentOverride = OVERRIDEKILL;};
         break;
       case 47:   
-        if(!tunerState) {kill();};   
+        if(!tunerState) {currentOverride = KILL;};   
         break;
       case 1:
-        if(!tunerState) {kill();};
+        if(!tunerState) {currentOverride = KILL;};
         setKillFirst(killAntiKillNum, 1);
         break;
       case 4:
-        if(!tunerState) {antiKill();};
+        if(!tunerState) {currentOverride = ANTIKILL;};
         setAntiFirst(killAntiKillNum, 1);
         break;
       case 18:
@@ -416,17 +436,17 @@ void setXYVals() {
         setKillFirst(killAntiKillNum, 0);
         break;
       case 44:
-        if(!tunerState) {antiKill();};
+        if(!tunerState) {currentOverride = ANTIKILL;};
         
         break;
       case 23:
-        if(!tunerState) {overRideKill();};
+        if(!tunerState) {currentOverride = OVERRIDEKILL;};
         break;
       case 27:   
-        if(!tunerState) {kill();};
+        if(!tunerState) {currentOverride = KILL;};
         break;
       case 30:
-        if(!tunerState) {antiKill();};
+        if(!tunerState) {currentOverride = ANTIKILL;};
         setKillFirst(killAntiKillNum, 0);
         setAntiFirst(killAntiKillNum, 1);
         break; 
@@ -435,22 +455,22 @@ void setXYVals() {
         setAntiFirst(killAntiKillNum, 0);
         break;
       case 43:
-        if(!tunerState) {kill();};
+        if(!tunerState) {currentOverride = KILL;};
         setAntiFirst(killAntiKillNum, 0);
         setKillFirst(killAntiKillNum, 1);
         break;
       case 45:   
-        if(!tunerState) {kill();};
+        if(!tunerState) {currentOverride = KILL;};
         break; 
       case 46:
-        if(!tunerState) {antiKill();};
+        if(!tunerState) {currentOverride = ANTIKILL;};
         break;  
       case 5:
-        if(!tunerState) {kill();};
+        if(!tunerState) {currentOverride = KILL;};
         setKillFirst(killAntiKillNum, 1);
         break;
       case 22:
-        if(!tunerState) {antiKill();};
+        if(!tunerState) {currentOverride = ANTIKILL;};
         setKillFirst(killAntiKillNum, 0);
         setAntiFirst(killAntiKillNum, 1);
         break;
@@ -462,7 +482,7 @@ void setXYVals() {
         setAntiFirst(killAntiKillNum, 0);
         break;   
       case 41:
-        if(!tunerState) {kill();};
+        if(!tunerState) {currentOverride = KILL;};
         setAntiFirst(killAntiKillNum, 0);
         setKillFirst(killAntiKillNum, 1);
         break;
@@ -471,16 +491,18 @@ void setXYVals() {
   };
   void applyTaper() {        
     if(!tunerState) {
-      for(unsigned char i = 0; i<NUM_OF_PARAMETERS;i++) {
-        switch(PARA_TAPER_TYPES[i]) {
-          case 0:
-            break;
-          case 1:
-            outputVals[i] = TAPER_ARRAY[0][outputVals[i]];
-            break;
-          case 2:
-            outputVals[i] = TAPER_ARRAY[1][outputVals[i]];
-            break;
+      if(activeParas[i]) {
+        for(unsigned char i = 0; i<NUM_OF_PARAMETERS;i++) {
+          switch(PARA_TAPER_TYPES[i]) {
+            case 0:
+              break;
+            case 1:
+              outputVals[i] = TAPER_ARRAY[0][outputVals[i]];
+              break;
+            case 2:
+              outputVals[i] = TAPER_ARRAY[1][outputVals[i]];
+              break;
+          };
         };
       };
     };    
@@ -529,9 +551,12 @@ void setXYVals() {
     
      void setRGBVals() {
       for(unsigned char i = 0; i<NUM_OF_ROTARYS;i++) {
-        for(unsigned char j = 0; j<3; j++) {
-          rGBOutputs[(i*3)+j] = rGBTemplateArray[outputVals[pageNum*6+i]+j];
-        };
+        if(!activeParas[pageNum*6+i]) {
+          rGBOutputs[(i*3)+j] = 0;
+        }else 
+           for(unsigned char j = 0; j<3; j++) {
+             rGBOutputs[(i*3)+j] = rGBTemplateArray[outputVals[pageNum*6+i]+j];
+           };
       };
     };
   
