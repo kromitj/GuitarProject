@@ -80,8 +80,8 @@ void loop() {
   setXYVals();          // takes values from the xYInputVals array and changes the corresponding index in the rawVals array 
   setOutputVals();    // transfers rawVals[] to outputVals[]
   setTuner();           // determins if the tuner button is engadged and if so sets last iterations values to outputVals
-                        // need a function that assigns the defaultVals to paras with default activated
   killAntiKillLogic();  // determins if kill or antikill buttons are pressed and sends the correct values to outputVals
+                        // take killanti num and adjust outputVals[] accordingly
   applyTaper();         // takes the outputVals[] and sends it through the TAPER_ARRAY according to each paras taper type(0, 1, 2)  
   setRGBVals();         // 
   sendOutputVals();
@@ -209,10 +209,7 @@ void setXYVals() {
   }
   
   void xyAssignmentCheck() {
-    static unsigned char xOrYFirst = 0; // 0 = neither 1 = xFirst 2 = yFirst
-    static unsigned char lastXYState = 0;
     static unsigned char currentXYState = 0;  // static so it doesn't instanciate each iteration???...maybe...idk
-    static unsigned char btnCLick = 0;
     bitWrite(currentXYState, 0, bitRead(btnStatesTwo, ASSIGN_X_BIT)); // 0 bit = xAssign
     bitWrite(currentXYState, 1, bitRead(btnStatesTwo, ASSIGN_Y_BIT)); // 1 bit = yAssign
     switch (currentXYState) {
@@ -552,11 +549,13 @@ void setXYVals() {
      void setRGBVals() {
       for(unsigned char i = 0; i<NUM_OF_ROTARYS;i++) {
         if(!activeParas[pageNum*6+i]) {
-          rGBOutputs[(i*3)+j] = 0;
-        }else 
+          for(unsigned char j = 0; j<3; j++){
+            rGBOutputs[(i*3)+j] = 0;
+          };
+        }else { 
            for(unsigned char j = 0; j<3; j++) {
              rGBOutputs[(i*3)+j] = rGBTemplateArray[outputVals[pageNum*6+i]+j];
            };
+        };
       };
-    };
   
