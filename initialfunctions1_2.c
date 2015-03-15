@@ -618,34 +618,35 @@ void setXYVals() {
         static unsigned char firstClickHoldInterval[NUM_OF_ROTARYS];
         static unsigned char betweenClicksInterval[NUM_OF_ROTARYS];
         for(unsigned char y = 2; y<NUM_OF_ROTARYS+2; y++) {
+         unsigned char arrayIndex = y-2;;
           boolean currentClickState = bitRead(btnStatesOne, y);
           if(currentClickState && !firstClick[y-2]) {
-            firstClick[y-2] = true;
+            firstClick[arrayIndex] = true;
           } else if(currentClickState && firstClick[y-2]) {
-              firstClickHoldInterval[y-2]++;
-              if(firstClickHoldInterval[y-2]>BTN_CLK_HOLD_TIME) {
-                firstClick[y-2] = false;
-                firstClickHoldInterval[y-2] = 0;
-                currentClickStates[y-2] = HOLD;
+              firstClickHoldInterval[arrayIndex]++;
+              if(firstClickHoldInterval[arrayIndex]>BTN_CLK_HOLD_TIME) {
+                firstClick[arrayIndex] = false;
+                firstClickHoldInterval[arrayIndex] = 0;
+                currentClickStates[arrayIndex] = HOLD;
               };
-          } else if(!currentClickState && firstClick[y-2]) {
-            firstClickFall[y-2] = true;
-            betweenClicksInterval[y-2]++;
-            if(betweenClicksInterval[y-2]> BTN_CLK_TIMER) {
-              firstClick[y-2] = false;
-              firstClickFall[y-2] = false;
-              firstClickHoldInterval[y-2] = 0;
-              betweenClicksInterval[y-2] = 0;
-              currentClickStates[y-2] = SINGLE;
+          } else if(!currentClickState && firstClick[arrayIndex]) {
+            firstClickFall[arrayIndex] = true;
+            betweenClicksInterval[arrayIndex]++;
+            if(betweenClicksInterval[arrayIndex]> BTN_CLK_TIMER) {
+              firstClick[arrayIndex] = false;
+              firstClickFall[arrayIndex] = false;
+              firstClickHoldInterval[arrayIndex] = 0;
+              betweenClicksInterval[arrayIndex] = 0;
+              currentClickStates[arrayIndex] = SINGLE;
             };
           } else if(currentClickState && firstClickFall[y-2]) {
-             firstClick[y-2] = false;
-              firstClickFall[y-2] = false;
-              firstClickHoldInterval[y-2] = 0;
-              betweenClicksInterval[y-2] = 0;
-              currentClickStates[y-2] = DOUBLE;
+             firstClick[arrayIndex] = false;
+              firstClickFall[arrayIndex] = false;
+              firstClickHoldInterval[arrayIndex] = 0;
+              betweenClicksInterval[arrayIndex] = 0;
+              currentClickStates[arrayIndex] = DOUBLE;
           } else {
-            currentClickStates[y-2] = NOCLICK;
+            currentClickStates[arrayIndex] = NOCLICK;
           };
         };
       };
