@@ -6,7 +6,9 @@
 const unsigned char NUM_OF_PARAMETERS = 24;
 const unsigned char NUM_OF_ROTARYS = 6;
 const unsigned char NUM_OF_PRESETS = 4;
-const unsigned char DEBOUNCE_NUM = 15;
+const unsigned char BTN_DEBOUNCE_NUM = 15;
+const unsigned char BTN_CLK_HOLD_TIME = 100;
+const unsigned char BTN_CLK_TIMER = 20
 
 const unsigned char INIT_PARA_VALS = 125;
 const unsigned char ROTARY_STARTUPVALS = 0;
@@ -60,8 +62,19 @@ unsigned char outputVals[NUM_OF_PARAMETERS]; // the plus one is a page byte whic
 unsigned char lastOutputVals[NUM_OF_PARAMETERS];
 unsigned char rGBOutputs[NUM_OF_ROTARYS*3];
 
-enum override {KILL, ANTIKILL, OVERRIDEKILL};
+enum override {
+  KILL,
+  ANTIKILL, 
+  OVERRIDEKILL
+};
 enum override currentOverride;
+enum clickStates {
+  NONE,
+  SINGLE,
+  DOUBLE,
+  HOLD
+};
+enum clickStates currentClickStates;
 
   
 void setup() {
@@ -264,7 +277,7 @@ void setXYVals() {
      static boolean presetLoopFilter = false; // keeps program from iteratind the eeprom writes over repeatedly
      if (checkPresetState()) {               // with this it will only write once per button push
        presetDebouncer++;
-       if(presetDebouncer>DEBOUNCE_NUM){
+       if(presetDebouncer>BTN_DEBOUNCE_NUM){
          if(!presetLoopFilter){
            for(unsigned char i=0; i<NUM_OF_PARAMETERS; i++) {      // copies 74 bytes of data to eeprom
              EEPROM.write(presetNum*PRESET_SIZE+i, defVals[i]);
@@ -290,7 +303,7 @@ void setXYVals() {
     static unsigned char saveDefaultsDebounce = 0;
     if(checkSaveDefState()) {
      saveDefaultsDebounce++;
-     if(saveDefaultDebounce>DEBOUNCE_NUM) {
+     if(saveDefaultDebounce>BTN_DEBOUNCE_NUM) {
        saveDefaultDebounce = 0;
        for(unsigned char i = 0; 0<NUM_OF_PARAMETERS; i++) {
          if(activeParas[i]) {
@@ -558,4 +571,41 @@ void setXYVals() {
            };
         };
       };
-  
+      
+      void processClick() {
+        static boolean firstClick[NUM_OF_ROTARYS];
+        static boolean firstClickFall[NUM_OF_ROTARYS];
+        static unsigned char firstClickHoldInterval[NUM_OF_ROTARYS];
+        static unsigned char betweenClicksInterval[NUM_OF_ROTARYS];
+        for(unsigned char i = 2; i<NUM_OF_ROTARYS+2;i++) {
+          boolean currentClickState = bitRead(btnStateOne, i);
+          if(currentClickState && !firstCLick[i-2]) {
+            firstClick[i-2] = true;
+          } else if(currentCLickState && firstClick[i-2]) {
+              firstClickHoldInterval[i-2]++;
+              if(firstClickHoldInterval[i-2]>BTN_CLK_HOLD_TIME) {
+                fistClick[i-2] = false;
+                firstClickHoldInterval[i-2] = 0;
+                currentClickStates[i-2] = HOLD;
+              };
+          } else if(!currentClickState && firstClick[i-2]) {
+            firstClickFall[i-2] = true;
+            betweenClicksInterval[i-2]++;
+            if(betweenClicksInterval> BTN_CLK_TIMER) {
+              firstClick[i-2] = false;
+              firstClickFall[i-2] = false;
+              firstClickHoldInterval[i-2] = 0;
+              betweenClicksInterval[i-2] = 0;
+              currentClickStates[i-2] = SINGLE;
+            };
+          } else if(currentClickState && firstClickFall[i-2]) {
+             firstClick[i-2] = false;
+              firstClickFall[i-2] = false;
+              firstClickHoldInterval[i-2] = 0;
+              betweenClicksInterval[i-2] = 0;
+              currentClickState[i-2] = DOUBLE:
+          } else {
+            currentClickState[i-2] = NONE;
+          };
+        };
+      };
