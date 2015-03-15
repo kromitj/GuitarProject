@@ -8,13 +8,13 @@ const unsigned char NUM_OF_ROTARYS = 6;
 const unsigned char NUM_OF_PRESETS = 4;
 const unsigned char BTN_DEBOUNCE_NUM = 15;
 const unsigned char BTN_CLK_HOLD_TIME = 100;
-const unsigned char BTN_CLK_TIMER = 20
+const unsigned char BTN_CLK_TIMER = 20;
 
 const unsigned char INIT_PARA_VALS = 125;
 const unsigned char ROTARY_STARTUPVALS = 0;
 const unsigned char PARA_TAPER_TYPES[NUM_OF_PARAMETERS] = {0, 0, 0, 1, 0, 2, 1, 1, 1, 0, 0, 2, 2, 1, 1, 1, 0, 0, 1, 2, 1, 1, 0, 1}; // 0 = linear 1 = logrithmatic 2 = anti-logrithmatic
 
-const unsigned char PRESET_SIZE = NUM_OF_PARAMETERS*3+2;
+const unsigned char PRESET_SIZE = NUM_OF_PARAMETERS*4+2;
 const unsigned char ROTARY_NO_CHANGE[NUM_OF_ROTARYS] = {0, 0, 0, 0, 0, 0};     // a template to check against the current rotary vals, if they are equal then there was no movement on any of the encoders
 unsigned char TAPER_ARRAY[2][256];// this 2d array will hold both the log taper and the anti-log taper which will modify the outputVals to account for differant potentiameter types(linear, audio(log), and anti-log) linear pots dont need to be adjusted so no val array is needed
 
@@ -57,24 +57,25 @@ unsigned char yAssignment;
       boolean tunerState;
       boolean activeParas[NUM_OF_PARAMETERS]; 
 
-unsigned char outputResolution[NUM_OF_PARAMETERS]; 
+unsigned char outputResolution[NUM_OF_PARAMETERS]; // should be saved to eeprom
 unsigned char outputVals[NUM_OF_PARAMETERS]; // the plus one is a page byte which tells the other arduin 
 unsigned char lastOutputVals[NUM_OF_PARAMETERS];
 unsigned char rGBOutputs[NUM_OF_ROTARYS*3];
 
 enum override {
+  NONE,
   KILL,
   ANTIKILL, 
   OVERRIDEKILL
 };
 enum override currentOverride;
 enum clickStates {
-  NONE,
+  NOCLICK,
   SINGLE,
   DOUBLE,
   HOLD
 };
-enum clickStates currentClickStates;
+enum clickStates currentClickStates[NUM_OF_ROTARYS];
 
   
 void setup() {
@@ -86,6 +87,7 @@ void loop() {
   parseSerialData();    // takes in serial parses all ten bytes to correct variables
   setPageNum();         // takes current serial information and checks what page the user wants
   rotarysChangeState(); // parses through the rotaryVals array and looks for changes in value(0's equate to no change while negative and positive show how many steps a specific rotary has moved since the last serial iteration  
+  processClick();
   xyAssignmentCheck();  //  does logic determining if either the assignX or assignY buttons were pressed and calles the proper functions
   setPreset();           // check to see if setPreset button was pressed and if so assigns the current values of the defVals, defStates, rawVals array to correspondoing presetNum eeprom momory space  
   handleDefaultStates(); // checks if the user if requesting to change the state of any of the defaultStates
@@ -94,8 +96,9 @@ void loop() {
   setOutputVals();    // transfers rawVals[] to outputVals[]
   setTuner();           // determins if the tuner button is engadged and if so sets last iterations values to outputVals
   killAntiKillLogic();  // determins if kill or antikill buttons are pressed and sends the correct values to outputVals
-                        // take killanti num and adjust outputVals[] accordingly
-  applyTaper();         // takes the outputVals[] and sends it through the TAPER_ARRAY according to each paras taper type(0, 1, 2)  
+  applyOutputModifiers();                     // take killanti num and adjust outputVals[] accordingly
+  applyOutputResolution();
+  applyTaper();          // takes the outputVals[] and sends it through the TAPER_ARRAY according to each paras taper type(0, 1, 2)  
   setRGBVals();         // 
   sendOutputVals();
 };
@@ -120,11 +123,11 @@ void loop() {
                                 // example serial input {0, 0, 0, 0, -1, 0, 125, 0, b00011000, b10011001 } total of ten bytes
   void parseSerialData() {     // takes incoming serial data and parses it to correct variables for processing
     if (Serial.available() > 0) {
-      for(unsigned char i=0; i<NUM_OF_ROTARYS; i++) {
-        rotaryVals[i] = Serial.read();    //  takes first 6 bytes and puts them in the rotaryVals array
+      for(unsigned char a=0; a<NUM_OF_ROTARYS; a++) {
+        rotaryVals[a] = Serial.read();    //  takes first 6 bytes and puts them in the rotaryVals array
       };
-      for(unsigned char i=0; i<2; i++) {
-        xYInputVals[i]= Serial.read();    // takes the 7-8th bytes and puts them in the xyInputsVals array
+      for(unsigned char a=0; a<2; a++) {
+        xYInputVals[a]= Serial.read();    // takes the 7-8th bytes and puts them in the xyInputsVals array
       };
       btnStatesOne = Serial.read();       // takes the 9th byte and puts it in the btnStatesOne variable 
       btnStatesTwo = Serial.read();       // takes the 10th byte and puts it in the btnStatesTwo variable          
@@ -137,9 +140,9 @@ void loop() {
   };
   
    void rotarysChangeState() {    
-      for(unsigned char i=0; i<NUM_OF_ROTARYS; i++) {
-        if(rotaryVals[i] != ROTARY_NO_CHANGE[i]) {
-          setRawVals(i);
+      for(unsigned char b=0; b<NUM_OF_ROTARYS; b++) {
+        if(rotaryVals[b] != ROTARY_NO_CHANGE[b]) {
+          setRawVals(b);
         }; 
       };
   };
@@ -184,18 +187,18 @@ void setXYVals() {
 
   
   unsigned char checkForBtnClick() {  // used in assignX() and assignY()
-    for(unsigned char i = 2; i<8; i++) {
-      if(bitRead(btnStatesOne, i)) {
-        return i-1;  // another 1 is sutractred in assignX() and assignY()
+     for(unsigned char c= 2; c<8; c++) {
+      if(bitRead(btnStatesOne, c)) {
+        return c-1;  // another 1 is sutractred in assignX() and assignY()
       };
     };
     return 0;
   };
   
   boolean checkForBtnClickBoolean() {     // used in handleDefaultStates, looks in the btnStatesOne byte which shows rotory btn click info and 
-    for(unsigned char i = 2; i<8; i++) {  // returns true if any of the rotorys were clicked in the current iteration
-      if(bitRead(btnStatesOne, i)) {
-        return i;
+    for(unsigned char d = 2; d<8; d++) {  // returns true if any of the rotorys were clicked in the current iteration
+      if(bitRead(btnStatesOne, d)) {
+        return d;
       };
     };
     return 0;
@@ -210,7 +213,13 @@ void setXYVals() {
       };      
     };
   };
-  
+    void assignX_2() { // used in xyAssignmentCheck(), it checks the btnStatesOne array for a btn click and assigns the xAssignment variable to the parameter number
+      for(unsigned char e = 0; e<NUM_OF_ROTARYS; e++) {
+        if(currentClickStates[e] == SINGLE){
+          xAssignment = pageNum*NUM_OF_ROTARYS+e; // produces 0 -24
+        };
+      };
+    };
   void assignY() {  // used in xyAssignmentCheck(), it checks the btnStatesOne array for a btn click and assigns the yAssignment variable to the parameter number
     unsigned char btnClk = checkForBtnClick(); // that the found rotary click represents
     if(btnClk > 0) {
@@ -220,6 +229,13 @@ void setXYVals() {
       };
     }; 
   }
+  void assignY_2() { // used in xyAssignmentCheck(), it checks the btnStatesOne array for a btn click and assigns the xAssignment variable to the parameter number
+  for(unsigned char f = 0; f<NUM_OF_ROTARYS; f++) {
+    if(currentClickStates[f] == SINGLE){
+      yAssignment = pageNum*NUM_OF_ROTARYS+f; // produces 0 -24
+    };
+  };
+};
   
   void xyAssignmentCheck() {
     static unsigned char currentXYState = 0;  // static so it doesn't instanciate each iteration???...maybe...idk
@@ -235,16 +251,15 @@ void setXYVals() {
         assignY();
         break;
       case 3:
-         static boolean paraNumFirst = true;
-         static unsigned char paraNum;
-         unsigned char clkCheck = checkForBtnClick();
-         if(clkCheck && paraNumFirst) {
-           paraNumFirst = false;
-           paraNum = clkCheck-1;             
-         };
-         if(clkCheck) {
-           outputResolution[pageNum*6+paraNum] = clkCheck;
-           switch(paraNum) {
+         static boolean paraNumFirst = true;  
+         static unsigned char paraNum;      
+         for(unsigned char g = 0; g<NUM_OF_ROTARYS;g++) {
+           if(currentClickStates[g] == SINGLE && paraNumFirst) {
+             paraNum = g;
+             paraNumFirst = false;
+           } else if(currentClickStates[g] == SINGLE) {
+             paraNumFirst = true;
+             switch(paraNum) {
              case 0:
                outputResolution[pageNum*6+paraNum] = 1;
                break;
@@ -263,8 +278,9 @@ void setXYVals() {
              case 5:
                outputResolution[pageNum*6+paraNum] = 32;
                break;             
-           };  
-         };
+             }; 
+           };
+         };    
     };
   };
   
@@ -273,21 +289,22 @@ void setXYVals() {
   };
   
     void setPreset() {
-     static presetDebouncer = 0;
+     static unsigned char presetDebouncer = 0;
      static boolean presetLoopFilter = false; // keeps program from iteratind the eeprom writes over repeatedly
      if (checkPresetState()) {               // with this it will only write once per button push
        presetDebouncer++;
        if(presetDebouncer>BTN_DEBOUNCE_NUM){
          if(!presetLoopFilter){
-           for(unsigned char i=0; i<NUM_OF_PARAMETERS; i++) {      // copies 74 bytes of data to eeprom
-             EEPROM.write(presetNum*PRESET_SIZE+i, defVals[i]);
-             EEPROM.write(NUM_OF_PARAMETERS+(presetNum*PRESET_SIZE+i), defStates[i]);
-             EEPROM.write((NUM_OF_PARAMETERS*2)+(presetNum*PRESET_SIZE+i), rawVals[i]);        
+           for(unsigned char h=0; h<NUM_OF_PARAMETERS; h++) {      // copies 74 bytes of data to eeprom
+             EEPROM.write(presetNum*PRESET_SIZE+h, defVals[h]);
+             EEPROM.write(NUM_OF_PARAMETERS+(presetNum*PRESET_SIZE+h), defStates[h]);
+             EEPROM.write((NUM_OF_PARAMETERS*2)+(presetNum*PRESET_SIZE+h), rawVals[h]); 
+             EEPROM.write((NUM_OF_PARAMETERS*3)+(presetNum*PRESET_SIZE+h), outputResolution[h]);       
            };
-             EEPROM.write((NUM_OF_PARAMETERS*3)+(presetNum*PRESET_SIZE), xAssignment);
-             EEPROM.write((NUM_OF_PARAMETERS*3)+(presetNum*PRESET_SIZE)+1, yAssignment);
+             EEPROM.write((NUM_OF_PARAMETERS*4)+(presetNum*PRESET_SIZE), xAssignment);
+             EEPROM.write((NUM_OF_PARAMETERS*4)+(presetNum*PRESET_SIZE)+1, yAssignment);
              presetLoopFilter = true;
-             presetDeboucer = 0;
+             presetDebouncer = 0;
          };
        } else {
         presetLoopFilter = false; 
@@ -303,8 +320,8 @@ void setXYVals() {
     static unsigned char saveDefaultsDebounce = 0;
     if(checkSaveDefState()) {
      saveDefaultsDebounce++;
-     if(saveDefaultDebounce>BTN_DEBOUNCE_NUM) {
-       saveDefaultDebounce = 0;
+     if(saveDefaultsDebounce>BTN_DEBOUNCE_NUM) {
+       saveDefaultsDebounce = 0;
        for(unsigned char i = 0; 0<NUM_OF_PARAMETERS; i++) {
          if(activeParas[i]) {
            if(defStates[i] = false) {
@@ -329,9 +346,9 @@ void setXYVals() {
   
   void handleDefaultStates() {
     if (!checkXYAsignState()) {
-      for(unsigned char i = 0; i<NUM_OF_ROTARYS; i++) {
-        if(activeParas[i]) {
-          defStates[pageNum*6+i] = bitRead(btnStatesOne, i+2);
+      for(unsigned char k = 0; k<NUM_OF_ROTARYS; k++) {
+        if(currentClickStates[k] == SINGLE && activeParas[pageNum*NUM_OF_ROTARYS+k]) {
+          defStates[pageNum*NUM_OF_ROTARYS+k] = bitRead(btnStatesOne, k+2);
         };
       };
     };
@@ -340,9 +357,9 @@ void setXYVals() {
   void setTuner() {
     boolean checkTunerState = bitRead(btnStatesTwo, TUNER_BIT);
     if(checkTunerState) {
-      for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-        if(activeParas[i]) {
-          outputVals[i] = lastOutputVals[i];
+      for(unsigned char m = 0; m<NUM_OF_PARAMETERS; m++) {
+        if(activeParas[m]) {
+          outputVals[m] = lastOutputVals[m];
         };
       };
       tunerState = true;                                                  
@@ -361,12 +378,12 @@ void setXYVals() {
   };
   
   void setOutputVals() {
-    for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-     if(activeParas[i]) {
-       if(defStates[1]) {
-        outputVals[i] = defVals[i];
+    for(unsigned char z = 0; z<NUM_OF_PARAMETERS; z++) {
+     if(activeParas[z]) {
+       if(defStates[z]) {
+        outputVals[z] = defVals[z];
       } else {
-        outputVals[i] = rawVals[i];
+        outputVals[z] = rawVals[z];
       };
       
      };
@@ -375,28 +392,28 @@ void setXYVals() {
   };
  
  void kill() {  // used in killANtiKillLogic() sets all outputVals[] to the paras default vals
-   for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-     if(activeParas[i]) {
-       outputVals[i] = defVals[i];
+   for(unsigned char n = 0; n<NUM_OF_PARAMETERS; n++) {
+     if(activeParas[n]) {
+       outputVals[n] = defVals[n];
      };
    };
  };
  
  void antiKill() {  // used in killANtiKillLogic() sets all outPutVals[] to the rawVals
-   for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) {
-     if(activeParas[i]) {
-       outputVals[i] = rawVals[i];
+   for(unsigned char p = 0; p<NUM_OF_PARAMETERS; p++) {
+     if(activeParas[p]) {
+       outputVals[p] = rawVals[p];
      };
    };
  };
  
  void overRideKill() {  // used in killANtiKillLogic()
-   for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++)  {
-     if(activeParas[i]) {
-       if(!defStates[i]) {
-         outputVals[i] = rawVals[i];
+   for(unsigned char q = 0; q<NUM_OF_PARAMETERS; q++)  {
+     if(activeParas[q]) {
+       if(!defStates[q]) {
+         outputVals[q] = rawVals[q];
      } else {
-         outputVals[i] = defVals[i];
+         outputVals[q] = defVals[q];
        };
      };
    };
@@ -500,30 +517,30 @@ void setXYVals() {
     };    
   };
   void applyTaper() {        
-    if(!tunerState) {
-      if(activeParas[i]) {
-        for(unsigned char i = 0; i<NUM_OF_PARAMETERS;i++) {
-          switch(PARA_TAPER_TYPES[i]) {
+    if(!tunerState) {      
+      for(unsigned char r = 0; r<NUM_OF_PARAMETERS; r++) {
+        if(activeParas[r]) { 
+          switch(PARA_TAPER_TYPES[r]) {
             case 0:
               break;
             case 1:
-              outputVals[i] = TAPER_ARRAY[0][outputVals[i]];
+              outputVals[r] = TAPER_ARRAY[0][outputVals[r]];
               break;
             case 2:
-              outputVals[i] = TAPER_ARRAY[1][outputVals[i]];
+              outputVals[r] = TAPER_ARRAY[1][outputVals[r]];
               break;
           };
         };
-      };
-    };    
+      };    
+    };
   };
     
     void sendOutputVals() {
-      for(unsigned char i = 0; i<NUM_OF_PARAMETERS; i++) { 
+      for(unsigned char s = 0; s<NUM_OF_PARAMETERS; s++) { 
         if(!tunerState) {
-          lastOutputVals[i] = outputVals[i];
+          lastOutputVals[s] = outputVals[s];
         };        
-        Serial.write(outputVals[i]);
+        Serial.write(outputVals[s]);
       };
     };  
    
@@ -560,16 +577,39 @@ void setXYVals() {
     };
     
      void setRGBVals() {
-      for(unsigned char i = 0; i<NUM_OF_ROTARYS;i++) {
-        if(!activeParas[pageNum*6+i]) {
-          for(unsigned char j = 0; j<3; j++){
-            rGBOutputs[(i*3)+j] = 0;
+      for(unsigned char t = 0; t<NUM_OF_ROTARYS; t++) {
+        if(!activeParas[pageNum*6+t]) {
+          for(unsigned char u = 0; u<3; u++){
+            rGBOutputs[(t*3)+u] = 0;
           };
         }else { 
-           for(unsigned char j = 0; j<3; j++) {
-             rGBOutputs[(i*3)+j] = rGBTemplateArray[outputVals[pageNum*6+i]+j];
+           for(unsigned char v = 0; v<3; v++) {
+             rGBOutputs[(t*3)+v] = rGBTemplateArray[outputVals[pageNum*6+t]+v];
            };
         };
+      };
+    };
+      
+      void applyOutputModifiers() {
+        switch(currentOverride) {
+          case NONE:
+            break;
+          case KILL:
+            kill();
+            break;
+          case ANTIKILL:
+            antiKill();
+            break;
+          case OVERRIDEKILL:
+            overRideKill();
+            break;
+        };
+      };
+      
+      void applyOutputResolution() {
+        for(unsigned char x = 0; x<NUM_OF_PARAMETERS; x++) {
+          outputVals[x] = outputVals[(x/outputResolution[x])*outputResolution[x]];
+        };        
       };
       
       void processClick() {
@@ -577,35 +617,35 @@ void setXYVals() {
         static boolean firstClickFall[NUM_OF_ROTARYS];
         static unsigned char firstClickHoldInterval[NUM_OF_ROTARYS];
         static unsigned char betweenClicksInterval[NUM_OF_ROTARYS];
-        for(unsigned char i = 2; i<NUM_OF_ROTARYS+2;i++) {
-          boolean currentClickState = bitRead(btnStateOne, i);
-          if(currentClickState && !firstCLick[i-2]) {
-            firstClick[i-2] = true;
-          } else if(currentCLickState && firstClick[i-2]) {
-              firstClickHoldInterval[i-2]++;
-              if(firstClickHoldInterval[i-2]>BTN_CLK_HOLD_TIME) {
-                fistClick[i-2] = false;
-                firstClickHoldInterval[i-2] = 0;
-                currentClickStates[i-2] = HOLD;
+        for(unsigned char y = 2; y<NUM_OF_ROTARYS+2; y++) {
+          boolean currentClickState = bitRead(btnStatesOne, y);
+          if(currentClickState && !firstClick[y-2]) {
+            firstClick[y-2] = true;
+          } else if(currentClickState && firstClick[y-2]) {
+              firstClickHoldInterval[y-2]++;
+              if(firstClickHoldInterval[y-2]>BTN_CLK_HOLD_TIME) {
+                firstClick[y-2] = false;
+                firstClickHoldInterval[y-2] = 0;
+                currentClickStates[y-2] = HOLD;
               };
-          } else if(!currentClickState && firstClick[i-2]) {
-            firstClickFall[i-2] = true;
-            betweenClicksInterval[i-2]++;
-            if(betweenClicksInterval> BTN_CLK_TIMER) {
-              firstClick[i-2] = false;
-              firstClickFall[i-2] = false;
-              firstClickHoldInterval[i-2] = 0;
-              betweenClicksInterval[i-2] = 0;
-              currentClickStates[i-2] = SINGLE;
+          } else if(!currentClickState && firstClick[y-2]) {
+            firstClickFall[y-2] = true;
+            betweenClicksInterval[y-2]++;
+            if(betweenClicksInterval[y-2]> BTN_CLK_TIMER) {
+              firstClick[y-2] = false;
+              firstClickFall[y-2] = false;
+              firstClickHoldInterval[y-2] = 0;
+              betweenClicksInterval[y-2] = 0;
+              currentClickStates[y-2] = SINGLE;
             };
-          } else if(currentClickState && firstClickFall[i-2]) {
-             firstClick[i-2] = false;
-              firstClickFall[i-2] = false;
-              firstClickHoldInterval[i-2] = 0;
-              betweenClicksInterval[i-2] = 0;
-              currentClickState[i-2] = DOUBLE:
+          } else if(currentClickState && firstClickFall[y-2]) {
+             firstClick[y-2] = false;
+              firstClickFall[y-2] = false;
+              firstClickHoldInterval[y-2] = 0;
+              betweenClicksInterval[y-2] = 0;
+              currentClickStates[y-2] = DOUBLE;
           } else {
-            currentClickState[i-2] = NONE;
+            currentClickStates[y-2] = NOCLICK;
           };
         };
       };
