@@ -87,7 +87,7 @@ void loop() {
   parseSerialData();    // takes in serial parses all ten bytes to correct variables
   setPageNum();         // takes current serial information and checks what page the user wants
   rotarysChangeState(); // parses through the rotaryVals array and looks for changes in value(0's equate to no change while negative and positive show how many steps a specific rotary has moved since the last serial iteration  
-  processClick();
+  processClick();       // determines if its a click a double click or a pressn for all the rotaries
   xyAssignmentCheck();  //  does logic determining if either the assignX or assignY buttons were pressed and calles the proper functions
   setPreset();           // check to see if setPreset button was pressed and if so assigns the current values of the defVals, defStates, rawVals array to correspondoing presetNum eeprom momory space  
   handleDefaultStates(); // checks if the user if requesting to change the state of any of the defaultStates
@@ -617,7 +617,7 @@ void setXYVals() {
         static boolean firstClickFall[NUM_OF_ROTARYS];
         static unsigned char firstClickHoldInterval[NUM_OF_ROTARYS];
         static unsigned char betweenClicksInterval[NUM_OF_ROTARYS];
-        for(unsigned char y = 2; y<NUM_OF_ROTARYS+2; y++) {
+        for(unsigned char y = 2; y<NUM_OF_ROTARYS+2; y++) { //Accounts for byteStatesOne input byte {(111111)00}
          unsigned char arrayIndex = y-2;;
           boolean currentClickState = bitRead(btnStatesOne, y);
           if(currentClickState && !firstClick[y-2]) {
